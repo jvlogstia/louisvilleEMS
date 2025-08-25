@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Emergency Command Center | RexusOps360™</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com" defer></script>
+
+  <!-- Chart.js (locked v4) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" defer></script>
+
+  <!-- Icons + Fonts -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --color-alert-critical: #ff2e4d;
+      --color-alert-high: #ff6b35;
+      --color-alert-medium: #ffb347;
+      --color-alert-low: #77dd77;
+      --color-alert-resolved: #4ecdc4;
+    }
+    * { box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+    .dashboard-card { background:#fff; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.04), 0 2px 4px -1px rgba(0,0,0,0.06); }
+    .emergency-selector {
+      background-image:url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+      background-position: right 0.5rem center; background-repeat:no-repeat; background-size:1.25em 1.25em;
+    }
+    .time-filter-btn {
+      padding:0.25rem 0.75rem; border-radius:0.375rem; font-size:.875rem; border:1px solid #D1D5DB; background:#fff;
+    }
+    .time-filter-btn.active { background:#DC2626; color:#fff; border-color:#DC2626; font-weight:600; }
+    .reset-btn {
+      padding:0.35rem 0.8rem; border-radius:0.5rem; font-size:.875rem; border:1px solid #9CA3AF; background:#F9FAFB; color:#111827; display:flex; align-items:center; gap:.5rem;
+    }
+    .reset-btn:hover { background:#E5E7EB; }
+    .severity-indicator { width:12px; height:12px; border-radius:50%; display:inline-block; margin-right:6px; }
+    .severity-1 { background-color: var(--color-alert-resolved); }
+    .severity-2 { background-color: var(--color-alert-low); }
+    .severity-3 { background-color: var(--color-alert-medium); }
+    .severity-4 { background-color: var(--color-alert-high); }
+    .severity-5 { background-color: var(--color-alert-critical); }
+    .command-header { background: linear-gradient(135deg, #8E0E00 0%, #1F1C18 100%); }
+    .map-container { height: 500px; border-radius: 0.75rem; overflow: hidden; }
+    .status-badge {
+      padding:0.25rem 0.5rem; border-radius:9999px; font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;
+    }
+    .badge-reported { background:#e5e7eb; color:#374151; }
+    .badge-assigned { background:#dbeafe; color:#1e40af; }
+    .badge-in-progress { background:#fef3c7; color:#92400e; }
+    .badge-resolved { background:#d1fae5; color:#065f46; }
+    .command-title { font-family:'Space Grotesk', sans-serif; font-weight:700; }
+    .empty-state { padding:2rem; text-align:center; color:#6b7280; }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-50">
+  <!-- Command Header -->
+  <header class="command-header text-white shadow-lg sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-4">
+      <div class="flex flex-col md:flex-row justify-between items-center">
+        <div class="flex items-center space-x-4 mb-4 md:mb-0">
+          <i class="fas fa-broadcast-tower text-2xl mr-3"></i>
+          <div>
+            <h1 class="command-title text-2xl">Emergency Command Center</h1>
+            <p class="text-xs opacity-80">RexusOps360™ Crisis Management System</p>
+          </div>
+        </div>
+
+        <!-- Filters + Reset -->
+        <div class="flex flex-col md:flex-row items-center gap-2 md:gap-3 w-full md:w-auto">
+          <div class="relative w-full md:w-64">
+            <select id="emergencyTypeFilter" class="emergency-selector appearance-none bg-white bg-opacity-10 border border-white border-opacity-30 rounded-lg pl-3 pr-8 py-2 text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50 w-full">
+              <option value="">All Emergency Types</option>
+              <optgroup label="Weather Events">
+                <option value="Tornado">Tornado</option>
+                <option value="Severe Thunderstorm">Severe Thunderstorm</option>
+                <option value="Flash Flood Warning">Flash Flood Warning</option>
+              </optgroup>
+              <optgroup label="Public Safety">
+                <option value="Major Traffic Accident">Major Traffic Accident</option>
+                <option value="Building Collapse">Building Collapse</option>
+                <option value="Gas Leak">Gas Leak</option>
+              </optgroup>
+              <optgroup label="Infrastructure">
+                <option value="Power Outage">Power Outage</option>
+                <option value="Water Main Break">Water Main Break</option>
+              </optgroup>
+              <optgroup label="Other">
+                <option value="Medical">Medical Emergency</option>
+                <option value="Fire/Wildfire">Fire/Wildfire</option>
+                <option value="Other">Other</option>
+              </optgroup>
+            </select>
+          </div>
+
+          <button id="resetBtn" class="reset-btn" title="Clear all filters and stored incidents">
+            <i class="fa-solid fa-trash-can"></i><span>Reset All</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+    <!-- KPI Row -->
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="dashboard-card rounded-xl p-4">
+        <div class="text-xs text-gray-500">Total Incidents</div>
+        <div id="kpiTotal" class="text-2xl font-semibold mt-1">0</div>
+        <div id="kpiTotalDelta" class="text-xs text-gray-500 mt-1">—</div>
+      </div>
+      <div class="dashboard-card rounded-xl p-4">
+        <div class="text-xs text-gray-500">Open (Reported/Assigned/In Progress)</div>
+        <div id="kpiOpen" class="text-2xl font-semibold mt-1">0</div>
+        <div id="kpiOpenBreakdown" class="text-xs text-gray-500 mt-1">—</div>
+      </div>
+      <div class="dashboard-card rounded-xl p-4">
+        <div class="text-xs text-gray-500">Avg Response (min)</div>
+        <div id="kpiAvgResponse" class="text-2xl font-semibold mt-1">—</div>
+        <div class="text-xs text-gray-500 mt-1">By type-weighted estimate</div>
+      </div>
+      <div class="dashboard-card rounded-xl p-4">
+        <div class="text-xs text-gray-500">Resolution Rate (7d)</div>
+        <div id="kpiResolution" class="text-2xl font-semibold mt-1">—</div>
+        <div class="text-xs text-gray-500 mt-1">Resolved / Total</div>
+      </div>
+    </section>
+
+    <!-- Analytics Row -->
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div class="dashboard-card rounded-xl p-4">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="font-semibold text-gray-800"><i class="fa-solid fa-circle-nodes text-red-500 mr-2"></i>Severity Distribution</h3>
+          <div class="text-xs text-gray-500" id="sevTotal">—</div>
+        </div>
+        <canvas id="chartSeverity" height="220" aria-label="Severity distribution"></canvas>
+      </div>
+      <div class="dashboard-card rounded-xl p-4 lg:col-span-2">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="font-semibold text-gray-800"><i class="fa-solid fa-chart-line text-red-500 mr-2"></i>Incidents (Last 7 Days)</h3>
+          <div class="text-xs text-gray-500" id="seriesRange">—</div>
+        </div>
+        <canvas id="chartTimeline" height="220" aria-label="Incidents timeline"></canvas>
+      </div>
+    </section>
+
+    <!-- Incident Map -->
+    <div class="dashboard-card p-5 rounded-xl">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-gray-800 flex items-center">
+          <i class="fas fa-map-marked-alt text-red-500 mr-2"></i> Incident Map
+        </h2>
+        <div class="flex items-center space-x-2">
+          <button class="time-filter-btn" data-filter="live">Live</button>
+          <button class="time-filter-btn" data-filter="24h">24h</button>
+          <button class="time-filter-btn active" data-filter="week">Week</button>
+        </div>
+      </div>
+      <div class="map-container" id="incidentMap" aria-label="Incident locations map"></div>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <div class="flex items-center text-xs"><span class="severity-indicator severity-5 mr-1"></span> Critical</div>
+        <div class="flex items-center text-xs"><span class="severity-indicator severity-4 mr-1"></span> High</div>
+        <div class="flex items-center text-xs"><span class="severity-indicator severity-3 mr-1"></span> Medium</div>
+        <div class="flex items-center text-xs"><span class="severity-indicator severity-2 mr-1"></span> Low</div>
+        <div class="flex items-center text-xs"><span class="severity-indicator severity-1 mr-1"></span> Resolved</div>
+      </div>
+    </div>
+
+    <!-- Incident Reports -->
+    <div class="dashboard-card bg-white rounded-xl shadow-sm overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center space-y-3 md:space-y-0">
+        <div>
+          <h2 class="text-lg font-semibold text-gray-800 flex items-center">
+            <i class="fas fa-list-check text-red-500 mr-2"></i> Incident Reports
+          </h2>
+          <p class="text-xs text-gray-500 mt-1">All reported incidents</p>
+        </div>
+        <div class="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-4 w-full md:w-auto">
+          <div class="relative w-full md:w-48">
+            <select id="severityFilter" class="emergency-selector appearance-none w-full bg-gray-100 border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500">
+              <option value="">All Severities</option>
+              <option value="5">Critical (5)</option>
+              <option value="4">High (4)</option>
+              <option value="3">Medium (3)</option>
+              <option value="2">Low (2)</option>
+              <option value="1">Resolved (1)</option>
+            </select>
+          </div>
+          <div class="relative w-full md:w-48">
+            <select id="statusFilter" class="emergency-selector appearance-none w-full bg-gray-100 border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500">
+              <option value="">All Statuses</option>
+              <option value="Reported">Reported</option>
+              <option value="Assigned">Assigned</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Resolved">Resolved</option>
+            </select>
+          </div>
+          <button id="refreshBtn" class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition flex items-center justify-center">
+            <i class="fas fa-sync-alt mr-2"></i> Refresh
+          </button>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-red-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">Incident</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">Location</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">Priority</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">Reported</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">Status</th>
+            </tr>
+          </thead>
+          <tbody id="emergencyTableBody" class="bg-white divide-y divide-gray-200">
+            <!-- Data injected here -->
+          </tbody>
+        </table>
+        <div id="emptyState" class="empty-state hidden">
+          <i class="fa-regular fa-folder-open text-xl"></i>
+          <p class="mt-2">No incidents available. Add data via your backend or seed locally.</p>
+        </div>
+      </div>
+      <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-between bg-gray-50">
+        <div class="text-sm text-gray-500">
+          Showing <span class="font-medium" id="showingCount">0</span> of <span class="font-medium" id="totalCount">0</span> incidents
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // ----------------------- CONFIG -----------------------
+    const CONFIG = {
+      STORAGE_KEY: 'louisvilleIncidents',
+      RESPONSE_TEAMS: ['EMS Alpha','Fire Bravo','PD Charlie','SWAT Delta','Hazmat Echo','Search & Rescue','Utility Response'],
+      STATUS_FLOW: ['Reported','Assigned','In Progress','Resolved'],
+      TYPE_METRICS: {
+        'Tornado': { avgResponse: 8, avgResolve: 45 },
+        'Severe Thunderstorm': { avgResponse: 12, avgResolve: 30 },
+        'Flash Flood Warning': { avgResponse: 15, avgResolve: 90 },
+        'Power Outage': { avgResponse: 30, avgResolve: 240 },
+        'Medical': { avgResponse: 5, avgResolve: 25 },
+        'Fire/Wildfire': { avgResponse: 7, avgResolve: 120 },
+        'Major Traffic Accident': { avgResponse: 10, avgResolve: 60 },
+        'Gas Leak': { avgResponse: 6, avgResolve: 45 },
+        'Water Main Break': { avgResponse: 25, avgResolve: 180 },
+        'Other': { avgResponse: 10, avgResolve: 60 }
+      }
+    };
+
+    // ----------------------- UTIL -----------------------
+    function getSeverityColor(sev){ return ({1:'#4ecdc4',2:'#77dd77',3:'#ffb347',4:'#ff6b35',5:'#ff2e4d'})[sev] || '#777'; }
+    function getSeverityLabel(sev){ return ({1:'Resolved',2:'Low',3:'Medium',4:'High',5:'Critical'})[sev] || 'Unknown'; }
+    function getSeverityTextColor(sev){ return ({1:'text-green-600',2:'text-lime-600',3:'text-yellow-600',4:'text-orange-600',5:'text-red-600'})[sev] || 'text-gray-600'; }
+    function getStatusBadgeClass(s){ return ({'Reported':'badge-reported','Assigned':'badge-assigned','In Progress':'badge-in-progress','Resolved':'badge-resolved'})[s] || 'badge-reported'; }
+    function getEmergencyIcon(type){
+      const m={'Tornado':'🌪️','Severe Thunderstorm':'⛈️','Flash Flood Warning':'🌊','Major Traffic Accident':'🚗','Fire/Wildfire':'🔥','Medical':'🚑','Power Outage':'💡','Gas Leak':'⚠️','Water Main Break':'🚰','Other':'❓'};
+      return m[type]||'⚠️';
+    }
+    function formatDateTime(str){
+      try{ const d=new Date(str); if(isNaN(d.getTime())) return '—';
+        return d.toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+      }catch{ return '—'; }
+    }
+    function daysAgo(n){ const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()-n); return d; }
+    function safeParse(json, fallback){ try{ return JSON.parse(json);}catch{ return fallback; } }
+
+    // ----------------------- DATA -----------------------
+    function readIncidents(){
+      const raw = localStorage.getItem(CONFIG.STORAGE_KEY);
+      return raw ? safeParse(raw, []) : [];
+    }
+    function writeIncidents(arr){
+      localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(arr||[]));
+    }
+    function normalizeIncident(i){
+      const rawSeverity=Number(i.severity||i.priority||3);
+      const sev10=Math.max(1,Math.min(10,Number.isFinite(rawSeverity)?rawSeverity:3));
+      const sev5=sev10<=2?1:sev10<=4?2:sev10<=6?3:sev10<=8?4:5;
+      const reportedAt=i.reported_at||i.reportedAt||i.timestamp||i.created_at||i.createdAt||new Date().toISOString();
+      const resolvedAt=i.resolved_at||i.resolvedAt||null;
+      const status=i.status||i.state||(i.resolved?'Resolved':(i.adminReply?'Assigned':'Reported'));
+      const responseTeam=i.response_team||i.responseTeam||i.assignedTeam||'—';
+      return { id:i.id||i._id||`inc-${Math.floor(1000+Math.random()*9000)}`, type:i.type||i.category||'Other', subtype:i.subtype||i.subCategory||null, location:i.address||i.location||i.neighborhood||'Unknown', zone:i.zone||i.area||null, severity:sev5, reportedAt, resolvedAt, status, responseTeam, _raw:i };
+    }
+
+    // ----------------------- MAP -----------------------
+    let incidentMap, markersLayer;
+    function initMap(){
+      if(!window.L) return;
+      incidentMap = L.map('incidentMap').setView([38.2527, -85.7585], 11);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ attribution:'&copy; OpenStreetMap contributors' }).addTo(incidentMap);
+      markersLayer = L.layerGroup().addTo(incidentMap);
+    }
+    function updateMap(incidents){
+      if(!incidentMap || !markersLayer) return;
+      markersLayer.clearLayers();
+      incidents.forEach(e=>{
+        const baseLat=38.2527+(Math.random()*0.1-0.05);
+        const baseLng=-85.7585+(Math.random()*0.1-0.05);
+        const icon=L.divIcon({ className:'map-marker', html:`<div style="background-color:${getSeverityColor(e.severity)};width:16px;height:16px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 5px rgba(0,0,0,.3);"></div>`, iconSize:[20,20], iconAnchor:[10,10] });
+        L.marker([baseLat,baseLng],{icon}).bindPopup(`
+          <div class="text-sm font-medium">${e.type}</div>
+          <div class="text-xs text-gray-600">${e.location}</div>
+          <div class="mt-1 flex items-center">
+            <span class="status-badge ${getStatusBadgeClass(e.status)}">${e.status}</span>
+            <span class="severity-indicator severity-${e.severity} ml-2"></span>
+          </div>
+          <div class="text-xs text-gray-500 mt-1">${formatDateTime(e.reportedAt)}</div>
+        `).addTo(markersLayer);
+      });
+    }
+
+    // ----------------------- FILTERS / STATE -----------------------
+    let currentData=[];
+    let currentTypeFilter=''; let currentSeverityFilter=''; let currentStatusFilter=''; let currentTimeFilter='week'; // live|24h|week
+
+    function withinTimeFilter(iso){
+      const t=new Date(iso).getTime(); const now=Date.now();
+      if(currentTimeFilter==='live') return (now-t)<=60*60*1000;
+      if(currentTimeFilter==='24h') return (now-t)<=24*60*60*1000;
+      return (now-t)<=7*24*60*60*1000;
+    }
+    function filterData(data){
+      let f=data.filter(e=>withinTimeFilter(e.reportedAt));
+      if(currentTypeFilter) f=f.filter(e=>e.type===currentTypeFilter);
+      if(currentSeverityFilter) f=f.filter(e=>String(e.severity)===String(currentSeverityFilter));
+      if(currentStatusFilter) f=f.filter(e=>e.status===currentStatusFilter);
+      return f;
+    }
+
+    // ----------------------- TABLE -----------------------
+    function updateTable(data){
+      const tbody=document.getElementById('emergencyTableBody');
+      const empty=document.getElementById('emptyState');
+      tbody.innerHTML='';
+      document.getElementById('totalCount').textContent=currentData.length;
+      document.getElementById('showingCount').textContent=data.length;
+
+      if(!currentData.length){
+        empty.classList.remove('hidden');
+        return;
+      } else {
+        empty.classList.add('hidden');
+      }
+
+      data.forEach(e=>{
+        const now=new Date(), reported=new Date(e.reportedAt);
+        const mins=Math.max(0,Math.floor((now-reported)/(1000*60)));
+        const since = mins>=60 ? `${Math.floor(mins/60)}h ${mins%60}m` : `${mins}m`;
+        const tr=document.createElement('tr');
+        tr.className='hover:bg-red-50';
+        tr.innerHTML=`
+          <td class="px-6 py-4 whitespace-nowrap">
+            <div class="flex items-center">
+              <span class="text-lg mr-2">${getEmergencyIcon(e.type)}</span>
+              <div>
+                <div class="text-sm font-medium text-gray-900">${e.type}</div>
+                <div class="text-xs text-gray-500">${e.subtype||'N/A'}</div>
+              </div>
+            </div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            <div class="text-sm text-gray-900">${e.location}</div>
+            <div class="text-xs text-gray-500">${e.zone||'N/A'}</div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            <div class="flex items-center">
+              <span class="severity-indicator severity-${e.severity}"></span>
+              <span class="text-sm ${getSeverityTextColor(e.severity)}">${getSeverityLabel(e.severity)}</span>
+            </div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            <div class="text-xs text-gray-900">${formatDateTime(e.reportedAt)}</div>
+            <div class="text-xs text-gray-500">${since} ago</div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            <span class="status-badge ${getStatusBadgeClass(e.status)}">${e.status}</span>
+          </td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // ----------------------- ANALYTICS -----------------------
+    let chartSeverity, chartTimeline;
+
+    function computeAnalytics(data){
+      const sevCounts={1:0,2:0,3:0,4:0,5:0};
+      const statusCounts={'Reported':0,'Assigned':0,'In Progress':0,'Resolved':0};
+      const byDay=new Map(); for(let i=6;i>=0;i--){ byDay.set(daysAgo(i).toISOString().slice(0,10),0); }
+      let respSum=0, respN=0;
+
+      data.forEach(e=>{
+        sevCounts[e.severity]=(sevCounts[e.severity]||0)+1;
+        statusCounts[e.status]=(statusCounts[e.status]||0)+1;
+        const k=new Date(e.reportedAt).toISOString().slice(0,10);
+        if(byDay.has(k)) byDay.set(k, byDay.get(k)+1);
+        const metric=CONFIG.TYPE_METRICS[e.type]||CONFIG.TYPE_METRICS['Other'];
+        if(metric?.avgResponse){ respSum+=metric.avgResponse; respN++; }
+      });
+
+      const total=data.length, resolved=statusCounts['Resolved']||0;
+      return {
+        sevCounts, statusCounts,
+        byDay: Array.from(byDay.entries()).map(([date,count])=>({date,count})),
+        total,
+        resolutionRate: total?Math.round((resolved/total)*100):0,
+        avgResp: respN?Math.round(respSum/respN):null
+      };
+    }
+
+    function renderKPIs(a, all){
+      document.getElementById('kpiTotal').textContent=a.total;
+      const open=(a.statusCounts['Reported']||0)+(a.statusCounts['Assigned']||0)+(a.statusCounts['In Progress']||0);
+      document.getElementById('kpiOpen').textContent=open;
+      document.getElementById('kpiOpenBreakdown').textContent=`R ${a.statusCounts['Reported']||0} · A ${a.statusCounts['Assigned']||0} · IP ${a.statusCounts['In Progress']||0}`;
+      document.getElementById('kpiAvgResponse').textContent=a.avgResp??'—';
+      document.getElementById('kpiResolution').textContent=a.resolutionRate+'%';
+
+      const today=new Date().toISOString().slice(0,10), yest=daysAgo(1).toISOString().slice(0,10);
+      const counts={}; all.forEach(e=>{ const k=new Date(e.reportedAt).toISOString().slice(0,10); counts[k]=(counts[k]||0)+1; });
+      const delta=(counts[today]||0)-(counts[yest]||0);
+      const sign=delta>0?'+':''; const color=delta>0?'text-red-600':delta<0?'text-green-600':'text-gray-500';
+      document.getElementById('kpiTotalDelta').innerHTML=`<span class="${color}">${sign}${delta}</span> vs yesterday`;
+    }
+
+    function renderCharts(a){
+      const sevData=[a.sevCounts[1],a.sevCounts[2],a.sevCounts[3],a.sevCounts[4],a.sevCounts[5]];
+      document.getElementById('sevTotal').textContent=`${sevData.reduce((x,y)=>x+y,0)} incidents`;
+
+      const tlLabels=a.byDay.map(p=>p.date.slice(5));
+      const tlData=a.byDay.map(p=>p.count);
+      const rangeLabel = a.byDay.length ? `${a.byDay[0].date} → ${a.byDay.at(-1).date}` : '—';
+      document.getElementById('seriesRange').textContent=rangeLabel;
+
+      const ctxSev=document.getElementById('chartSeverity');
+      if(chartSeverity) chartSeverity.destroy();
+      chartSeverity=new Chart(ctxSev,{ type:'doughnut', data:{ labels:['Resolved (1)','Low (2)','Medium (3)','High (4)','Critical (5)'], datasets:[{ data:sevData }] }, options:{ responsive:true, plugins:{ legend:{ position:'bottom' } }, cutout:'60%' } });
+
+      const ctxTL=document.getElementById('chartTimeline');
+      if(chartTimeline) chartTimeline.destroy();
+      chartTimeline=new Chart(ctxTL,{ type:'line', data:{ labels:tlLabels, datasets:[{ label:'Incidents', data:tlData, tension:.3, fill:false }] }, options:{ responsive:true, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true, ticks:{ precision:0 } } } } });
+    }
+
+    // ----------------------- DISPLAY -----------------------
+    function updateDisplay(){
+      const filtered=filterData(currentData);
+      updateTable(filtered);
+      updateMap(filtered);
+      const analytics=computeAnalytics(filtered);
+      renderKPIs(analytics, currentData);
+      renderCharts(analytics);
+    }
+
+    async function fetchEmergencyData(){
+      try{
+        const raw=readIncidents();
+        currentData=raw.map(normalizeIncident);
+        updateDisplay();
+      }catch(err){ console.error('Error fetching emergency data:', err); }
+    }
+
+    function resetFiltersUI(){
+      // dropdowns (may not exist yet if DOM changed)
+      const typeSel=document.getElementById('emergencyTypeFilter');
+      const sevSel=document.getElementById('severityFilter');
+      const statSel=document.getElementById('statusFilter');
+      if(typeSel) typeSel.value='';
+      if(sevSel) sevSel.value='';
+      if(statSel) statSel.value='';
+      // time filter buttons
+      document.querySelectorAll('.time-filter-btn').forEach(b=>b.classList.remove('active'));
+      const weekBtn=document.querySelector(".time-filter-btn[data-filter='week']");
+      if(weekBtn) weekBtn.classList.add('active');
+    }
+
+    // ----------------------- INIT -----------------------
+    document.addEventListener('DOMContentLoaded', ()=>{
+      initMap();
+      fetchEmergencyData();
+
+      // Auto-refresh
+      const refreshTimer=setInterval(fetchEmergencyData, 30000);
+
+      // Filters
+      document.getElementById('emergencyTypeFilter').addEventListener('change', function(){ currentTypeFilter=this.value; updateDisplay(); });
+      document.getElementById('severityFilter').addEventListener('change', function(){ currentSeverityFilter=this.value; updateDisplay(); });
+      document.getElementById('statusFilter').addEventListener('change', function(){ currentStatusFilter=this.value; updateDisplay(); });
+      document.querySelectorAll('.time-filter-btn').forEach(btn=>{
+        btn.addEventListener('click', function(){
+          document.querySelectorAll('.time-filter-btn').forEach(b=>b.classList.remove('active'));
+          this.classList.add('active'); currentTimeFilter=this.dataset.filter; updateDisplay();
+        });
+      });
+      document.getElementById('refreshBtn').addEventListener('click', fetchEmergencyData);
+
+      // RESET ALL — clears localStorage and resets UI
+      document.getElementById('resetBtn').addEventListener('click', ()=>{
+        const sure = confirm('Reset All? This will CLEAR stored incidents (localStorage) and reset all filters.');
+        if(!sure) return;
+
+        // 1) clear storage
+        localStorage.removeItem(CONFIG.STORAGE_KEY);
+
+        // 2) reset filter state
+        currentTypeFilter=''; currentSeverityFilter=''; currentStatusFilter=''; currentTimeFilter='week';
+        resetFiltersUI();
+
+        // 3) clear current data and refresh UI
+        currentData = [];
+        updateDisplay(); // empties charts, map, and table (shows empty state)
+      });
+
+      // clean-up on unload (optional)
+      window.addEventListener('beforeunload', ()=>clearInterval(refreshTimer));
+    });
+  </script>
+</body>
+</html>

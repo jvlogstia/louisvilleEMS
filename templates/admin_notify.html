@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Emergency Alert System | RexusOps360™</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome 6 (Free) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Alert Sounds -->
+  <audio id="alertSound" src="https://assets.mixkit.co/sfx/preview/mixkit-alarm-digital-clock-beep-989.mp3" preload="auto"></audio>
+  <audio id="emergencySound" src="https://assets.mixkit.co/sfx/preview/mixkit-serious-alarm-937.mp3" preload="auto"></audio>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f8fafc;
+      background-image:
+        radial-gradient(circle at 10% 20%, rgba(219, 234, 254, 0.3) 0%, transparent 20%),
+        linear-gradient(to bottom, #f0f9ff, #ffffff);
+    }
+    .notification-card { box-shadow: 0 10px 25px -5px rgba(239, 68, 68, 0.1); border: 2px solid rgba(239, 68, 68, 0.2); transition: all 0.3s ease; }
+    .emergency-alert { background-color: #fff; border-left: 6px solid #ef4444; animation: alert-pulse 1.5s infinite; }
+    @keyframes alert-pulse { 
+      0% { box-shadow: 0 0 0 0 rgba(239,68,68,.4); } 
+      70% { box-shadow: 0 0 0 10px rgba(239,68,68,0); } 
+      100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); } 
+    }
+    .emergency-btn { background: linear-gradient(to right, #ef4444, #dc2626); }
+    .emergency-btn:hover { background: linear-gradient(to right, #dc2626, #b91c1c); }
+    .location-option { padding: 8px 12px; cursor: pointer; }
+    .location-option:hover { background-color: #fef2f2; }
+    .location-option i { margin-right: 8px; color: #ef4444; }
+    #map { height: 380px; border-radius: 16px; border: 1px solid #e5e7eb; }
+    /* Simple toast */
+    .toast { position: fixed; right: 16px; bottom: 16px; background: #111827; color: #fff; padding: 12px 16px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.25); opacity: 0; transform: translateY(10px); transition: all .25s ease; z-index: 9999;}
+    .toast.show { opacity: 1; transform: translateY(0); }
+    /* EAS Alert Animation */
+    @keyframes eas-alert {
+      0% { background-color: #ef4444; color: white; }
+      50% { background-color: #111827; color: #ef4444; }
+      100% { background-color: #ef4444; color: white; }
+    }
+    .eas-alert-bar {
+      animation: eas-alert 0.5s infinite;
+      font-family: 'Courier New', monospace;
+      font-weight: bold;
+      letter-spacing: 1px;
+    }
+    /* Blinking cursor */
+    @keyframes blink { 50% { opacity: 0; } }
+    .blinking-cursor { animation: blink 1s step-end infinite; }
+    /* Siren effect for emergency alerts */
+    @keyframes siren {
+      0% { color: #ef4444; }
+      50% { color: #ffffff; }
+      100% { color: #ef4444; }
+    }
+    .siren-text { animation: siren 0.5s infinite; }
+    /* Priority alert styles */
+    .priority-alert { border-left-width: 8px; }
+    .priority-advisory { border-left-color: #f59e0b; }
+    .priority-warning { border-left-color: #f97316; }
+    .priority-emergency { border-left-color: #ef4444; }
+    /* Alert templates menu */
+    .template-menu {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out;
+    }
+    .template-menu.open {
+      max-height: 300px;
+    }
+    /* Realistic EAS header */
+    .eas-header {
+      font-family: 'Courier New', monospace;
+      background: repeating-linear-gradient(
+        45deg,
+        #000,
+        #000 10px,
+        #ef4444 10px,
+        #ef4444 20px
+      );
+      color: white;
+      letter-spacing: 2px;
+    }
+  </style>
+</head>
+<body class="min-h-screen p-6">
+  <div class="max-w-6xl mx-auto">
+    <!-- Emergency Alert Header (EAS Style) -->
+    <div class="eas-header px-4 py-3 rounded-t-lg mb-1 flex items-center justify-between">
+      <div class="flex items-center">
+        <span class="text-xl mr-2">⏻</span>
+        <span class="text-sm font-mono">EMERGENCY ALERT SYSTEM</span>
+      </div>
+      <div class="text-xs font-mono">
+        <span id="current-time" class="mr-2">00:00:00</span>
+        <span>LOUISVILLE METRO</span>
+      </div>
+    </div>
+
+    <!-- Top Navigation -->
+    <div class="flex justify-between items-center mb-8">
+      <a href="{{ url_for('admin_dashboard_page') }}" class="flex items-center text-red-600 hover:text-red-800 transition-colors">
+        <i class="fas fa-arrow-left mr-2"></i>
+        <span>Back to Dashboard</span>
+      </a>
+      <div class="text-sm text-gray-500">
+        <i class="fas fa-shield-alt mr-1"></i> <span id="connection-status" class="text-green-600">●</span> Connected to LMPD Dispatch
+      </div>
+    </div>
+
+    <!-- Emergency Alert Banner -->
+    <div class="max-w-2xl mx-auto mb-8 emergency-alert p-4 rounded-lg flex items-start">
+      <div class="flex-shrink-0 text-red-500">
+        <i class="fas fa-triangle-exclamation text-xl"></i>
+      </div>
+      <div class="ml-3">
+        <p class="text-sm font-bold text-red-800">LOUISVILLE METRO EMERGENCY ALERT SYSTEM</p>
+        <p class="text-sm text-gray-800">All alerts will be broadcast to registered citizens via SMS, email, and emergency broadcast channels</p>
+      </div>
+    </div>
+
+    <!-- Page Header -->
+    <div class="text-center mb-10">
+      <div class="inline-flex items-center justify-center w-20 h-20 bg-red-100 rounded-full mb-4">
+        <i class="fas fa-bullhorn text-red-600 text-3xl" aria-hidden="true"></i>
+      </div>
+      <h1 class="text-4xl font-bold text-gray-800 mb-3">LOUISVILLE METRO EMERGENCY ALERTS</h1>
+      <p class="text-lg text-gray-600 max-w-2xl mx-auto">
+        Broadcast critical emergency alerts to Louisville Metro and surrounding areas
+      </p>
+    </div>
+
+    <!-- Map + Feed -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+      <div class="lg:col-span-2">
+        <div id="map" class="w-full"></div>
+        <p class="text-xs text-gray-500 mt-2">Map tiles © OpenStreetMap contributors</p>
+      </div>
+      <div>
+        <div class="bg-white rounded-2xl border border-gray-200 p-4 h-full">
+          <div class="flex justify-between items-center mb-3">
+            <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+              <i class="fa-solid fa-wave-square mr-2 text-red-500"></i> Live Broadcast Feed
+            </h3>
+            <div class="flex items-center text-sm">
+              <span id="feed-count" class="bg-gray-100 px-2 py-1 rounded">0</span>
+            </div>
+          </div>
+          <div id="feed" class="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+            <!-- Alerts will render here -->
+            <div class="text-center py-10 text-gray-400" id="empty-feed">
+              <i class="fas fa-inbox text-3xl mb-2"></i>
+              <p>No alerts broadcasted yet</p>
+            </div>
+          </div>
+          <div class="mt-4 flex gap-2">
+            <button id="clearFeed" class="flex-1 px-3 py-2 rounded-lg border text-sm hover:bg-gray-50">Clear Feed</button>
+            <button id="exportFeed" class="flex-1 px-3 py-2 rounded-lg border text-sm hover:bg-gray-50">Export JSON</button>
+            <button id="testAlert" class="flex-1 px-3 py-2 rounded-lg border text-sm bg-yellow-100 hover:bg-yellow-200">Test Alert</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notification Form -->
+    <div class="max-w-3xl mx-auto notification-card bg-white p-8 rounded-2xl">
+      <form id="alertForm" class="space-y-6">
+        <!-- Alert Templates -->
+        <div class="space-y-2">
+          <div class="flex justify-between items-center">
+            <label class="block text-sm font-semibold text-gray-700 uppercase tracking-wider">ALERT TEMPLATES</label>
+            <button type="button" id="toggleTemplates" class="text-xs text-blue-600 hover:text-blue-800">Show Templates</button>
+          </div>
+          <div id="templateMenu" class="template-menu bg-gray-50 rounded-lg p-2">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button type="button" class="template-btn text-left p-2 text-sm border rounded hover:bg-gray-100" data-template="tornado">
+                <span class="font-medium">🌪️ Tornado Warning</span>
+                <span class="block text-xs text-gray-500">Standard NWS tornado alert</span>
+              </button>
+              <button type="button" class="template-btn text-left p-2 text-sm border rounded hover:bg-gray-100" data-template="flashflood">
+                <span class="font-medium">🌊 Flash Flood</span>
+                <span class="block text-xs text-gray-500">Immediate flood danger</span>
+              </button>
+              <button type="button" class="template-btn text-left p-2 text-sm border rounded hover:bg-gray-100" data-template="activeShooter">
+                <span class="font-medium">❗ Active Threat</span>
+                <span class="block text-xs text-gray-500">Shelter in place protocol</span>
+              </button>
+              <button type="button" class="template-btn text-left p-2 text-sm border rounded hover:bg-gray-100" data-template="amber">
+                <span class="font-medium">🚨 AMBER Alert</span>
+                <span class="block text-xs text-gray-500">Child abduction emergency</span>
+              </button>
+              <button type="button" class="template-btn text-left p-2 text-sm border rounded hover:bg-gray-100" data-template="hazmat">
+                <span class="font-medium">☢️ HAZMAT Incident</span>
+                <span class="block text-xs text-gray-500">Chemical spill/release</span>
+              </button>
+              <button type="button" class="template-btn text-left p-2 text-sm border rounded hover:bg-gray-100" data-template="power">
+                <span class="font-medium">💡 Power Outage</span>
+                <span class="block text-xs text-gray-500">Extended outage notice</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Title Field -->
+        <div class="space-y-2">
+          <label class="block text-sm font-semibold text-gray-700 uppercase tracking-wider">ALERT TITLE</label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <i class="fas fa-exclamation text-red-400"></i>
+            </div>
+            <input id="title" placeholder="e.g., TORNADO WARNING - SEEK SHELTER IMMEDIATELY"
+              class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition font-bold"
+              required />
+          </div>
+        </div>
+
+        <!-- Message Field -->
+        <div class="space-y-2">
+          <label class="block text-sm font-semibold text-gray-700 uppercase tracking-wider">EMERGENCY MESSAGE</label>
+          <div class="relative">
+            <textarea id="message" rows="5" placeholder="Detailed emergency instructions for public safety..."
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition"
+              required></textarea>
+          </div>
+          <div class="flex justify-end">
+            <span id="charCount" class="text-xs text-gray-500">0/500 characters</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Category Field -->
+          <div class="space-y-2">
+            <label class="block text-sm font-semibold text-gray-700 uppercase tracking-wider">EMERGENCY TYPE</label>
+            <div class="relative">
+              <select id="category" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition appearance-none" required>
+                <option value="">All Emergency Types</option>
+                <option>🌪️ Tornado</option>
+                <option>⛈️ Severe Thunderstorm</option>
+                <option>🌊 Flash Flood Warning</option>
+                <option>⛈️ Thunderstorm</option>
+                <option>⚡ Lightning Strike</option>
+                <option>🌊 Flood</option>
+                <option>🌊 Flash Flood</option>
+                <option>🧊 Hailstorm</option>
+                <option>❄️ Winter Storm</option>
+                <option>🧊 Ice Storm</option>
+                <option>🌬️ Windstorm (Derecho)</option>
+                <option>🚗 Major Traffic Accident or Pile-up</option>
+                <option>🥶 Cold Wave</option>
+                <option>🏜️ Drought</option>
+                <option>🌍 Earthquake</option>
+                <option>🔥 Fire/Wildfire</option>
+                <option>🌐 Cyberattack</option>
+                <option>🚑 Medical Emergency</option>
+                <option>💡 Power Outage</option>
+                <option>⚠️ Gas Leak</option>
+                <option>☢️ Chemical Spill</option>
+                <option>☢️ HAZMAT INCIDENT</option>
+                <option>❗ Active Threat</option>
+                <option>🚨 AMBER Alert</option>
+                <option>🚨 Silver Alert</option>
+                <option>❓ Other</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Area Field - Louisville Metro Focused -->
+          <div class="space-y-2">
+            <label class="block text-sm font-semibold text-gray-700 uppercase tracking-wider">AFFECTED AREA</label>
+            <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <i class="fas fa-map-marked-alt text-red-400"></i>
+              </div>
+              <select id="area" class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition font-medium appearance-none" required>
+                <option value="">SELECT AFFECTED AREA</option>
+                <optgroup label="Louisville Metro">
+                  <option>Downtown Louisville</option>
+                  <option>East End</option>
+                  <option>South End</option>
+                  <option>West End</option>
+                  <option>Old Louisville</option>
+                  <option>Highlands</option>
+                  <option>St. Matthews</option>
+                  <option>Jeffersontown</option>
+                  <option>Okolona</option>
+                  <option>Pleasure Ridge Park</option>
+                  <option>Shively</option>
+                  <option>Newburg</option>
+                  <option>Portland</option>
+                  <option>Entire Louisville Metro</option>
+                </optgroup>
+                <optgroup label="Surrounding Areas">
+                  <option>Jefferson County</option>
+                  <option>Oldham County</option>
+                  <option>Shelby County</option>
+                  <option>Bullitt County</option>
+                  <option>Nelson County</option>
+                  <option>Clark County, IN</option>
+                  <option>Floyd County, IN</option>
+                  <option>Harrison County, IN</option>
+                  <option>Washington County, IN</option>
+                </optgroup>
+                <optgroup label="Specific Locations">
+                  <option>Louisville International Airport (SDF)</option>
+                  <option>UofL Belknap Campus</option>
+                  <option>UofL Health Sciences Campus</option>
+                  <option>Churchill Downs</option>
+                  <option>Kentucky Exposition Center</option>
+                  <option>Waterfront Park</option>
+                  <option>Ohio River Bridges</option>
+                </optgroup>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Severity Level -->
+          <div class="space-y-2">
+            <label class="block text-sm font-semibold text-gray-700 uppercase tracking-wider">ALERT SEVERITY</label>
+            <div class="grid grid-cols-3 gap-4">
+              <label class="inline-flex items-center">
+                <input type="radio" name="severity" value="advisory" class="h-4 w-4 text-yellow-500 focus:ring-yellow-500">
+                <span class="ml-2 text-gray-700">Advisory</span>
+              </label>
+              <label class="inline-flex items-center">
+                <input type="radio" name="severity" value="warning" class="h-4 w-4 text-orange-500 focus:ring-orange-500" checked>
+                <span class="ml-2 text-gray-700">Warning</span>
+              </label>
+              <label class="inline-flex items-center">
+                <input type="radio" name="severity" value="emergency" class="h-4 w-4 text-red-600 focus:ring-red-600">
+                <span class="ml-2 text-gray-700">Emergency</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Notification Channels -->
+          <div class="space-y-2">
+            <label class="block text-sm font-semibold text-gray-700 uppercase tracking-wider">BROADCAST CHANNELS</label>
+            <div class="flex flex-wrap gap-4">
+              <label class="inline-flex items-center">
+                <input type="checkbox" name="channels" value="sms" class="h-4 w-4 text-blue-500 focus:ring-blue-500" checked>
+                <span class="ml-2 text-gray-700">SMS</span>
+              </label>
+              <label class="inline-flex items-center">
+                <input type="checkbox" name="channels" value="email" class="h-4 w-4 text-blue-500 focus:ring-blue-500" checked>
+                <span class="ml-2 text-gray-700">Email</span>
+              </label>
+              <label class="inline-flex items-center">
+                <input type="checkbox" name="channels" value="broadcast" class="h-4 w-4 text-blue-500 focus:ring-blue-500" checked>
+                <span class="ml-2 text-gray-700">EAS</span>
+              </label>
+              <label class="inline-flex items-center">
+                <input type="checkbox" name="channels" value="app" class="h-4 w-4 text-blue-500 focus:ring-blue-500" checked>
+                <span class="ml-2 text-gray-700">Mobile App</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Submit Button -->
+        <div class="pt-4">
+          <button type="submit" id="submitBtn" class="w-full emergency-btn text-white px-6 py-4 rounded-lg font-bold hover:shadow-lg transition-all shadow-md flex items-center justify-center text-lg">
+            <i class="fas fa-broadcast-tower mr-3"></i> BROADCAST EMERGENCY ALERT
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Warning Footer -->
+    <div class="mt-10 text-center text-sm text-gray-700 bg-red-50 p-4 rounded-lg border border-red-200">
+      <p class="font-bold text-red-700"><i class="fas fa-triangle-exclamation mr-1"></i> AUTHORIZED USE ONLY: LOUISVILLE METRO EMERGENCY PERSONNEL</p>
+      <p class="mt-1">All alerts are logged and reviewed. False alerts may result in prosecution under KRS 508.075.</p>
+      <p class="mt-4">&copy; 2025 RexusOps360™ - Louisville Metro Emergency Services</p>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- EAS Alert Modal (hidden by default) -->
+  <div id="easModal" class="fixed inset-0 bg-black bg-opacity-90 z-[99999] flex items-center justify-center hidden">
+    <div class="bg-black text-white w-full max-w-2xl border-4 border-red-600 p-6">
+      <div class="eas-alert-bar px-4 py-2 mb-4 text-center font-mono">
+        EMERGENCY ALERT SYSTEM <span class="blinking-cursor">_</span>
+      </div>
+      <h2 id="modalTitle" class="text-3xl font-bold text-center mb-4 siren-text">EMERGENCY ALERT</h2>
+      <div id="modalBody" class="text-center text-xl mb-6 font-mono leading-relaxed">
+        Emergency alert message will appear here
+      </div>
+      <div class="text-center text-sm text-gray-400 font-mono">
+        Louisville Metro Emergency Services • <span id="modalTime">00:00:00</span>
+      </div>
+      <div class="mt-6 text-center">
+        <button id="closeModal" class="px-6 py-2 bg-red-600 text-white font-bold">ACKNOWLEDGE</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---------------------------
+    // Basic Leaflet Map Setup
+    // ---------------------------
+    const map = L.map('map', { zoomControl: true }).setView([38.2527, -85.7585], 11); // Louisville center
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+
+    // Keep track of layers for cleanup
+    let currentMarker = null;
+    let currentCircle = null;
+
+    // ---------------------------
+    // Area Coordinates (approx demo)
+    // ---------------------------
+    const AREAS = {
+      // Louisville Metro neighborhoods
+      "Downtown Louisville":            {lat: 38.256, lng: -85.756, type: "neighborhood"},
+      "East End":                       {lat: 38.280, lng: -85.570, type: "neighborhood"},
+      "South End":                      {lat: 38.130, lng: -85.770, type: "neighborhood"},
+      "West End":                       {lat: 38.260, lng: -85.820, type: "neighborhood"},
+      "Old Louisville":                 {lat: 38.227, lng: -85.758, type: "neighborhood"},
+      "Highlands":                      {lat: 38.236, lng: -85.708, type: "neighborhood"},
+      "St. Matthews":                   {lat: 38.252, lng: -85.651, type: "neighborhood"},
+      "Jeffersontown":                  {lat: 38.194, lng: -85.564, type: "neighborhood"},
+      "Okolona":                        {lat: 38.141, lng: -85.687, type: "neighborhood"},
+      "Pleasure Ridge Park":            {lat: 38.145, lng: -85.848, type: "neighborhood"},
+      "Shively":                        {lat: 38.200, lng: -85.819, type: "neighborhood"},
+      "Newburg":                        {lat: 38.172, lng: -85.683, type: "neighborhood"},
+      "Portland":                       {lat: 38.269, lng: -85.789, type: "neighborhood"},
+      "Entire Louisville Metro":        {lat: 38.2527, lng: -85.7585, type: "metro"},
+
+      // Surrounding areas (county seats / centroids)
+      "Jefferson County":               {lat: 38.2527, lng: -85.7585, type: "county"},
+      "Oldham County":                  {lat: 38.397, lng: -85.448, type: "county"},
+      "Shelby County":                  {lat: 38.210, lng: -85.189, type: "county"},
+      "Bullitt County":                 {lat: 37.996, lng: -85.684, type: "county"},
+      "Nelson County":                  {lat: 37.773, lng: -85.467, type: "county"},
+      "Clark County, IN":               {lat: 38.337, lng: -85.735, type: "county"},
+      "Floyd County, IN":               {lat: 38.285, lng: -85.824, type: "county"},
+      "Harrison County, IN":            {lat: 38.212, lng: -86.121, type: "county"},
+      "Washington County, IN":          {lat: 38.606, lng: -86.101, type: "county"},
+
+      // Point locations
+      "Louisville International Airport (SDF)": {lat: 38.174, lng: -85.736, type: "specific"},
+      "UofL Belknap Campus":                    {lat: 38.215, lng: -85.760, type: "specific"},
+      "UofL Health Sciences Campus":            {lat: 38.249, lng: -85.749, type: "specific"},
+      "Churchill Downs":                        {lat: 38.202, lng: -85.771, type: "specific"},
+      "Kentucky Exposition Center":             {lat: 38.198, lng: -85.739, type: "specific"},
+      "Waterfront Park":                        {lat: 38.260, lng: -85.743, type: "specific"},
+      "Ohio River Bridges":                     {lat: 38.258, lng: -85.741, type: "specific"},
+    };
+
+    // ---------------------------
+    // UI Elements
+    // ---------------------------
+    const form = document.getElementById('alertForm');
+    const titleEl = document.getElementById('title');
+    const messageEl = document.getElementById('message');
+    const categoryEl = document.getElementById('category');
+    const areaEl = document.getElementById('area');
+    const submitBtn = document.getElementById('submitBtn');
+    const feedEl = document.getElementById('feed');
+    const clearFeedBtn = document.getElementById('clearFeed');
+    const exportFeedBtn = document.getElementById('exportFeed');
+    const testAlertBtn = document.getElementById('testAlert');
+    const toastEl = document.getElementById('toast');
+    const emptyFeedEl = document.getElementById('empty-feed');
+    const feedCountEl = document.getElementById('feed-count');
+    const charCountEl = document.getElementById('charCount');
+    const toggleTemplatesBtn = document.getElementById('toggleTemplates');
+    const templateMenu = document.getElementById('templateMenu');
+    const templateBtns = document.querySelectorAll('.template-btn');
+    const easModal = document.getElementById('easModal');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalBody = document.getElementById('modalBody');
+    const modalTime = document.getElementById('modalTime');
+    const closeModalBtn = document.getElementById('closeModal');
+    const currentTimeEl = document.getElementById('current-time');
+    const connectionStatusEl = document.getElementById('connection-status');
+    const alertSound = document.getElementById('alertSound');
+    const emergencySound = document.getElementById('emergencySound');
+
+    // ---------------------------
+    // Alert Templates
+    // ---------------------------
+    const TEMPLATES = {
+      tornado: {
+        title: "TORNADO WARNING - SEEK SHELTER IMMEDIATELY",
+        message: `The National Weather Service has issued a TORNADO WARNING for your area until 5:45 PM. TAKE SHELTER NOW in a basement or interior room on the lowest floor. Stay away from windows. Monitor local media for updates. This is a dangerous storm capable of producing a tornado.`,
+        category: "🌪️ Tornado",
+        severity: "emergency"
+      },
+      flashflood: {
+        title: "FLASH FLOOD WARNING",
+        message: `Flash flooding is occurring or imminent in your area. Avoid low-lying areas and do not attempt to cross flooded roads. Turn around, don't drown! Water levels can rise rapidly. Seek higher ground immediately if in a flood-prone area.`,
+        category: "🌊 Flash Flood Warning",
+        severity: "warning"
+      },
+      activeShooter: {
+        title: "ACTIVE THREAT ALERT - SHELTER IN PLACE",
+        message: `Police are responding to an active threat situation in your area. SHELTER IN PLACE immediately. Lock doors, turn off lights, silence phones, and stay away from windows. Do not open the door for anyone except identified law enforcement. Monitor official channels for updates.`,
+        category: "❗ Active Threat",
+        severity: "emergency"
+      },
+      amber: {
+        title: "AMBER ALERT - CHILD ABDUCTION",
+        message: `AMBER ALERT issued for missing child. Suspect: White male, 30s, black hair, driving a red Ford F-150 KY license ABC123. Child: 8yo female, blonde hair, last seen wearing blue dress. If seen, call 911 immediately. Do not approach suspect.`,
+        category: "🚨 AMBER Alert",
+        severity: "emergency"
+      },
+      hazmat: {
+        title: "HAZMAT INCIDENT - EVACUATE AREA",
+        message: `Chemical release reported near 1200 Main St. EVACUATE immediately if you are within 1/2 mile radius. Move upwind if possible. Avoid contact with visible vapors. Close all windows and turn off HVAC systems. Updates will follow.`,
+        category: "☢️ HAZMAT INCIDENT",
+        severity: "emergency"
+      },
+      power: {
+        title: "EXTENDED POWER OUTAGE NOTICE",
+        message: `Widespread power outage expected to last 8-12 hours due to storm damage. Critical customers should implement backup plans. Check on neighbors, especially elderly. Avoid downed power lines - assume they are live. Cooling centers open at local community centers.`,
+        category: "💡 Power Outage",
+        severity: "advisory"
+      }
+    };
+
+    // ---------------------------
+    // Helpers
+    // ---------------------------
+    const emojiFromCategory = (label) => {
+      const txt = (label || "").toLowerCase();
+      if (txt.includes('tornado')) return '🌪️';
+      if (txt.includes('thunder')) return '⛈️';
+      if (txt.includes('flash flood')) return '🌊';
+      if (txt.includes('flood')) return '🌊';
+      if (txt.includes('lightning')) return '⚡';
+      if (txt.includes('hail')) return '🧊';
+      if (txt.includes('winter') || txt.includes('snow')) return '❄️';
+      if (txt.includes('ice')) return '🧊';
+      if (txt.includes('wind')) return '🌬️';
+      if (txt.includes('earthquake')) return '🌍';
+      if (txt.includes('fire')) return '🔥';
+      if (txt.includes('medical')) return '🚑';
+      if (txt.includes('power')) return '💡';
+      if (txt.includes('gas')) return '⚠️';
+      if (txt.includes('hazmat') || txt.includes('chemical')) return '☢️';
+      if (txt.includes('cyber')) return '🌐';
+      if (txt.includes('traffic') || txt.includes('accident')) return '🚗';
+      if (txt.includes('drought')) return '🏜️';
+      if (txt.includes('cold')) return '🥶';
+      if (txt.includes('active threat')) return '❗';
+      if (txt.includes('amber') || txt.includes('silver')) return '🚨';
+      return '❓';
+    };
+
+    const colorFromSeverity = (sev) => ({
+      advisory: '#f59e0b', // amber-500
+      warning:  '#f97316', // orange-500
+      emergency:'#ef4444'  // red-500
+    }[sev] || '#6b7280');   // gray-500
+
+    const radiusFromType = (type) => ({
+      specific: 500,
+      neighborhood: 1500,
+      county: 8000,
+      metro: 15000
+    }[type] || 1200);
+
+    const showToast = (text) => {
+      toastEl.textContent = text;
+      toastEl.classList.add('show');
+      setTimeout(() => toastEl.classList.remove('show'), 2200);
+    };
+
+    const getSelectedSeverity = () => (document.querySelector('input[name="severity"]:checked')?.value || 'warning');
+
+    const getSelectedChannels = () => {
+      const channels = [];
+      document.querySelectorAll('input[name="channels"]:checked').forEach(el => channels.push(el.value));
+      return channels;
+    };
+
+    const showEASModal = (alert) => {
+      modalTitle.textContent = alert.title;
+      modalBody.textContent = alert.message;
+      modalTime.textContent = new Date(alert.timestamp).toLocaleTimeString();
+      easModal.classList.remove('hidden');
+      
+      // Play appropriate sound
+      if (alert.severity === 'emergency') {
+        emergencySound.currentTime = 0;
+        emergencySound.play();
+      } else {
+        alertSound.currentTime = 0;
+        alertSound.play();
+      }
+    };
+
+    const updateCurrentTime = () => {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('en-US', { hour12: false });
+      currentTimeEl.textContent = timeStr;
+    };
+
+    // Simulate connection status changes
+    const simulateConnectionStatus = () => {
+      const statuses = ['● Connected', '○ Connecting...', '● Connected'];
+      let i = 0;
+      setInterval(() => {
+        connectionStatusEl.textContent = statuses[i];
+        connectionStatusEl.className = i === 1 ? 'text-yellow-500' : 'text-green-600';
+        i = (i + 1) % statuses.length;
+      }, 15000);
+    };
+
+    // Update character count
+    const updateCharCount = () => {
+      const count = messageEl.value.length;
+      charCountEl.textContent = `${count}/500 characters`;
+      if (count > 450) {
+        charCountEl.classList.add('text-yellow-600');
+        charCountEl.classList.remove('text-gray-500');
+      } else {
+        charCountEl.classList.remove('text-yellow-600');
+        charCountEl.classList.add('text-gray-500');
+      }
+    };
+
+    // Persist alerts
+    const STORAGE_KEY = 'rexusops360_alerts';
+    const loadAlerts = () => {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
+      catch { return []; }
+    };
+    const saveAlerts = (arr) => localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+
+    // Update feed count
+    const updateFeedCount = () => {
+      const count = document.querySelectorAll('#feed > div:not(#empty-feed)').length;
+      feedCountEl.textContent = count;
+      if (count > 0) {
+        emptyFeedEl.classList.add('hidden');
+      } else {
+        emptyFeedEl.classList.remove('hidden');
+      }
+    };
+
+    // ---------------------------
+    // Event Listeners
+    // ---------------------------
+    // Update submit button icon on category change
+    categoryEl.addEventListener('change', function() {
+      const icon = emojiFromCategory(this.value);
+      submitBtn.innerHTML = `<span class="mr-3 text-xl" aria-hidden="true">${icon}</span> BROADCAST ${this.value.toUpperCase()} ALERT`;
+    });
+
+    // Zoom when area changes
+    areaEl.addEventListener('change', function() {
+      const area = AREAS[this.value];
+      if (!area) return;
+      if (currentMarker) { map.removeLayer(currentMarker); currentMarker = null; }
+      if (currentCircle) { map.removeLayer(currentCircle); currentCircle = null; }
+      map.setView([area.lat, area.lng], area.type === 'specific' ? 15 : area.type === 'neighborhood' ? 13 : 11);
+    });
+
+    // Toggle templates menu
+    toggleTemplatesBtn.addEventListener('click', function() {
+      templateMenu.classList.toggle('open');
+      this.textContent = templateMenu.classList.contains('open') ? 'Hide Templates' : 'Show Templates';
+    });
+
+    // Template buttons
+    templateBtns.forEach(btn => {
+      btn.addEventListener('click', function() {
+        const template = TEMPLATES[this.dataset.template];
+        if (!template) return;
+        
+        titleEl.value = template.title;
+        messageEl.value = template.message;
+        categoryEl.value = template.category;
+        document.querySelector(`input[name="severity"][value="${template.severity}"]`).checked = true;
+        
+        // Trigger form border update
+        document.querySelector('input[name="severity"]:checked').dispatchEvent(new Event('change'));
+        
+        // Close template menu
+        templateMenu.classList.remove('open');
+        toggleTemplatesBtn.textContent = 'Show Templates';
+        
+        // Focus on area field for quick selection
+        areaEl.focus();
+      });
+    });
+
+    // Character count
+    messageEl.addEventListener('input', updateCharCount);
+
+    // Close EAS modal
+    closeModalBtn.addEventListener('click', () => {
+      easModal.classList.add('hidden');
+      emergencySound.pause();
+      alertSound.pause();
+    });
+
+    // Test alert button
+    testAlertBtn.addEventListener('click', () => {
+      const testAlert = {
+        title: "TEST ALERT - SYSTEM CHECK",
+        message: "This is a test of the Louisville Metro Emergency Alert System. No action is required. This is only a test.",
+        category: "System Test",
+        area: "Entire Louisville Metro",
+        severity: "advisory",
+        timestamp: Date.now()
+      };
+      showEASModal(testAlert);
+    });
+
+    // ---------------------------
+    // Render Feed Item
+    // ---------------------------
+    function renderFeedItem(a) {
+      const sevColor = colorFromSeverity(a.severity);
+      const icon = emojiFromCategory(a.category);
+      const time = new Date(a.timestamp).toLocaleString();
+      const el = document.createElement('div');
+      el.className = `border border-gray-200 rounded-lg p-3 priority-alert priority-${a.severity}`;
+      el.innerHTML = `
+        <div class="flex items-start">
+          <div class="text-2xl mr-3">${icon}</div>
+          <div class="flex-1">
+            <div class="flex items-center justify-between">
+              <h4 class="font-semibold text-gray-800">${a.title}</h4>
+              <span class="text-[10px] px-2 py-1 rounded-full" style="background:${sevColor}1A;color:${sevColor};border:1px solid ${sevColor}55">${a.severity.toUpperCase()}</span>
+            </div>
+            <div class="text-xs text-gray-500 mt-0.5">${a.category} • ${a.area} • ${time}</div>
+            <p class="text-sm text-gray-700 mt-2 whitespace-pre-wrap">${a.message}</p>
+            <div class="mt-2 text-xs text-gray-400">
+              <span class="inline-block mr-3"><i class="fas fa-broadcast-tower mr-1"></i> ${a.channels ? a.channels.join(', ').toUpperCase() : 'ALL CHANNELS'}</span>
+              <span class="inline-block"><i class="fas fa-user-shield mr-1"></i> ${a.sender || 'LMPD Dispatch'}</span>
+            </div>
+          </div>
+        </div>
+      `;
+      feedEl.prepend(el);
+      updateFeedCount();
+    }
+
+    // ---------------------------
+    // Plot on Map
+    // ---------------------------
+    function plotAlertOnMap(a) {
+      const area = AREAS[a.area];
+      if (!area) return;
+
+      // cleanup previous
+      if (currentMarker) map.removeLayer(currentMarker);
+      if (currentCircle) map.removeLayer(currentCircle);
+
+      const sevColor = colorFromSeverity(a.severity);
+      currentMarker = L.marker([area.lat, area.lng]).addTo(map);
+      currentMarker.bindPopup(`
+        <strong>${a.title}</strong><br/>
+        <span>${a.category}</span><br/>
+        <small>${a.area} • ${new Date(a.timestamp).toLocaleString()}</small><br/>
+        <div style="margin-top:6px">${a.message.replace(/\n/g, '<br/>')}</div>
+      `).openPopup();
+
+      currentCircle = L.circle([area.lat, area.lng], {
+        radius: radiusFromType(area.type),
+        color: sevColor, weight: 2, fillColor: sevColor, fillOpacity: 0.15
+      }).addTo(map);
+
+      // Fit a bit wider view if county/metro
+      if (area.type === 'county' || area.type === 'metro') {
+        map.setView([area.lat, area.lng], area.type === 'county' ? 11 : 10);
+      } else {
+        map.setView([area.lat, area.lng], area.type === 'specific' ? 15 : 13);
+      }
+    }
+
+    // ---------------------------
+    // Initialize
+    // ---------------------------
+    // Load persisted alerts into feed
+    const initial = loadAlerts();
+    initial.slice(-10).forEach(renderFeedItem); // show latest 10
+    updateFeedCount();
+
+    // Update time every second
+    updateCurrentTime();
+    setInterval(updateCurrentTime, 1000);
+
+    // Simulate connection status
+    simulateConnectionStatus();
+
+    // ---------------------------
+    // Form Submit
+    // ---------------------------
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      const alertObj = {
+        id: crypto.randomUUID(),
+        title: titleEl.value.trim(),
+        message: messageEl.value.trim(),
+        category: categoryEl.value || 'Other',
+        area: areaEl.value,
+        severity: getSelectedSeverity(),
+        channels: getSelectedChannels(),
+        sender: "Your Name (LMPD ID: #"+Math.floor(1000 + Math.random() * 9000),
+        timestamp: Date.now()
+      };
+
+      if (!AREAS[alertObj.area]) {
+        showToast('Select a valid area to broadcast.');
+        return;
+      }
+
+      if (alertObj.message.length > 500) {
+        showToast('Message must be 500 characters or less.');
+        return;
+      }
+
+      // Save + UI
+      const all = loadAlerts();
+      all.push(alertObj);
+      saveAlerts(all);
+
+      renderFeedItem(alertObj);
+      plotAlertOnMap(alertObj);
+      showToast('✅ Alert broadcasted to selected area');
+      showEASModal(alertObj);
+
+      // Visual severity border
+      const formCard = document.querySelector('.notification-card');
+      formCard.classList.remove('border-red-500', 'border-red-200');
+      if (alertObj.severity === 'emergency') formCard.classList.add('border-red-500');
+      else if (alertObj.severity === 'warning') formCard.classList.add('border-red-200');
+
+      // Reset (keep category/area for rapid multi-broadcasts)
+      titleEl.value = '';
+      messageEl.value = '';
+      titleEl.focus();
+      updateCharCount();
+    });
+
+    // Clear feed
+    clearFeedBtn.addEventListener('click', () => {
+      if (confirm('Clear entire alert history? This cannot be undone.')) {
+        saveAlerts([]);
+        feedEl.innerHTML = '';
+        if (currentMarker) { map.removeLayer(currentMarker); currentMarker = null; }
+        if (currentCircle) { map.removeLayer(currentCircle); currentCircle = null; }
+        showToast('Feed cleared.');
+        updateFeedCount();
+      }
+    });
+
+    // Export feed JSON
+    exportFeedBtn.addEventListener('click', () => {
+      const data = JSON.stringify(loadAlerts(), null, 2);
+      const blob = new Blob([data], {type: 'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `louisville-eas-alerts-${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      showToast('Alert history exported.');
+    });
+
+    // Severity radio -> form border accent
+    document.querySelectorAll('input[name="severity"]').forEach(radio => {
+      radio.addEventListener('change', function() {
+        const formCard = document.querySelector('.notification-card');
+        formCard.classList.remove('border-red-500', 'border-red-200', 'border-yellow-500');
+        if(this.value === 'emergency') formCard.classList.add('border-red-500');
+        else if(this.value === 'warning') formCard.classList.add('border-red-200');
+        else if(this.value === 'advisory') formCard.classList.add('border-yellow-500');
+      });
+    });
+
+    // Simulate incoming alerts from other dispatchers
+    setInterval(() => {
+      if (Math.random() > 0.9) { // 10% chance of simulated alert
+        const simulatedAlerts = [
+          {
+            title: "TRAFFIC ALERT - I-64 WESTBOUND CLOSED",
+            message: "I-64 Westbound closed between Exit 8 and Exit 5 due to multi-vehicle accident. Expect delays. Use alternate routes.",
+            category: "🚗 Major Traffic Accident or Pile-up",
+            area: "East End",
+            severity: "advisory",
+            channels: ["sms", "app"],
+            sender: "Traffic Control Unit #42",
+            timestamp: Date.now()
+          },
+          {
+            title: "SEVERE THUNDERSTORM WARNING",
+            message: "Severe thunderstorm capable of producing 60 mph winds and quarter-size hail. Seek shelter indoors until storm passes.",
+            category: "⛈️ Severe Thunderstorm",
+            area: "Jefferson County",
+            severity: "warning",
+            channels: ["sms", "email", "broadcast", "app"],
+            sender: "NWS Louisville",
+            timestamp: Date.now()
+          },
+          {
+            title: "GAS LEAK - EVACUATION ORDER",
+            message: "Gas leak reported at 1500 Main St. Evacuate within 2 block radius. Avoid open flames or sparks. Updates to follow.",
+            category: "⚠️ Gas Leak",
+            area: "Downtown Louisville",
+            severity: "emergency",
+            channels: ["sms", "broadcast", "app"],
+            sender: "LFD Hazmat Unit #3",
+            timestamp: Date.now()
+          }
+        ];
+        
+        const alert = simulatedAlerts[Math.floor(Math.random() * simulatedAlerts.length)];
+        const all = loadAlerts();
+        all.push(alert);
+        saveAlerts(all);
+        renderFeedItem(alert);
+        
+        // Only show modal for high priority alerts
+        if (alert.severity !== 'advisory') {
+          showEASModal(alert);
+        }
+      }
+    }, 60000); // Check every minute
+  </script>
+<script src="{{ url_for('static', filename='js/frontend_bridge.js') }}"></script>
+</body>
+</html>

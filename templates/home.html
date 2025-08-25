@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Louisville EMS | RexusOps360™ - Emergency Response Portal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Louisville Emergency Management System - Real-time crisis coordination for first responders and citizens">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-blue: #1a56db;
+      --emergency-red: #e02424;
+      --response-orange: #f05252;
+      --alert-amber: #f59e0b;
+    }
+    
+    body {
+      background-color: #f3f4f6;
+      font-family: 'Urbanist', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background-image: 
+        radial-gradient(circle at 10% 20%, rgba(229, 231, 235, 0.3) 0%, transparent 20%),
+        linear-gradient(to bottom, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%);
+      min-height: 100vh;
+    }
+
+    .dashboard-card {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    }
+
+    .dashboard-card:hover {
+      transform: translateY(-5px) scale(1.02);
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    }
+
+    .dashboard-card::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 5px;
+      background: linear-gradient(90deg, var(--emergency-red), var(--response-orange));
+      opacity: 0.8;
+      transition: opacity 0.3s ease;
+    }
+
+    .dashboard-card:hover::after {
+      opacity: 1;
+    }
+
+    .brand-logo {
+      animation: pulse 4s infinite ease-in-out;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+
+    .emergency-alert {
+      animation: alertPulse 2s infinite;
+    }
+
+    @keyframes alertPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+      70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+    }
+
+    .status-indicator {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background-color: #10b981;
+      border: 2px solid white;
+      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.5);
+    }
+
+    .system-status-badge {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      font-size: 0.75rem;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      background-color: #10b981;
+      color: white;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center px-4 py-8 bg-gray-50">
+
+  <div class="bg-white shadow-2xl rounded-2xl p-6 sm:p-10 max-w-4xl w-full border border-gray-100 animate__animated animate__fadeIn relative overflow-hidden">
+    
+    <!-- System Status Badge -->
+    <div class="system-status-badge animate__animated animate__fadeInRight">
+      <span class="relative flex h-2 w-2 mr-1 inline-block">
+        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+        <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+      </span>
+      SYSTEM OPERATIONAL
+    </div>
+
+    <!-- Watermark Background -->
+    <div class="absolute inset-0 opacity-5 pointer-events-none">
+      <svg viewBox="0 0 100 100" class="absolute top-0 left-0 w-1/3 h-auto">
+        <path d="M20,20 Q30,10 40,20 T60,20 T80,20" stroke="currentColor" stroke-width="1" fill="none" />
+      </svg>
+      <svg viewBox="0 0 100 100" class="absolute bottom-0 right-0 w-1/3 h-auto transform rotate-180">
+        <path d="M20,20 Q30,10 40,20 T60,20 T80,20" stroke="currentColor" stroke-width="1" fill="none" />
+      </svg>
+    </div>
+
+    <!-- Branding -->
+    <div class="text-center mb-8 transform hover:scale-105 transition duration-300">
+      <div class="relative inline-block">
+        <img src="/static/amptier_logo-removebg-preview.png" alt="Amptier Logo" class="h-20 mx-auto mb-2 brand-logo" />
+        <div class="status-indicator"></div>
+      </div>
+      <h1 class="text-3xl font-bold text-gray-800 tracking-tight">RexusOps360<sup class="text-xs align-super">™</sup></h1>
+      <p class="text-sm text-gray-500 italic mt-1">Integrated Emergency Response Platform</p>
+      <div class="mt-3 flex justify-center items-center space-x-2">
+        <span class="text-xs font-medium px-2.5 py-0.5 rounded bg-blue-100 text-blue-800">LFD</span>
+        <span class="text-xs font-medium px-2.5 py-0.5 rounded bg-red-100 text-red-800">LMPD</span>
+        <span class="text-xs font-medium px-2.5 py-0.5 rounded bg-green-100 text-green-800">LMEMS</span>
+      </div>
+    </div>
+
+    <!-- Emergency Title -->
+    <div class="text-center mb-8 relative">
+      <div class="absolute inset-x-0 top-1/2 h-0.5 bg-gradient-to-r from-transparent via-blue-400 to-transparent opacity-30"></div>
+      <h2 class="text-2xl sm:text-3xl font-bold text-gray-800 relative inline-block px-4 bg-white">
+        <span class="emergency-alert inline-flex items-center justify-center w-8 h-8 mr-2 rounded-full bg-red-100 text-red-600">
+          🚨
+        </span>
+        Emergency Management Portal
+      </h2>
+      <p class="text-gray-600 mt-3 max-w-md mx-auto">Secure access for Louisville Metro emergency personnel and residents</p>
+      <div class="mt-4 h-1 bg-gradient-to-r from-blue-500 via-red-500 to-orange-400 rounded-full w-1/4 mx-auto"></div>
+    </div>
+
+    <!-- Dashboard Options -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+
+      <!-- Admin Portal -->
+      <a href="{{ url_for('admin_login_page') }}" class="dashboard-card bg-gradient-to-br from-red-50 to-white hover:from-red-100 border border-red-100 rounded-xl p-6 shadow-sm relative group">
+        <div class="absolute top-3 right-3">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-300 group-hover:text-red-400 transition-colors" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+          </svg>
+        </div>
+        <div class="text-center">
+          <div class="w-14 h-14 bg-gradient-to-br from-red-100 to-red-50 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <h3 class="text-xl font-bold text-gray-800 mb-2">Admin Portal</h3>
+          <p class="text-sm text-gray-600 mb-3">Incident tracking, unit dispatch, and real-time operations monitoring</p>
+          <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+            <svg class="mr-1 w-3 h-3" fill="currentColor" viewBox="0 0 8 8">
+              <circle cx="4" cy="4" r="3" />
+            </svg>
+            Restricted Access
+          </span>
+        </div>
+      </a>
+
+      <!-- User Portal -->
+      <a href="{{ url_for('user_dashboard_page') }}" class="dashboard-card bg-gradient-to-br from-orange-50 to-white hover:from-orange-100 border border-orange-100 rounded-xl p-6 shadow-sm relative group">
+        <div class="absolute top-3 right-3">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-orange-300 group-hover:text-orange-400 transition-colors" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+          </svg>
+        </div>
+        <div class="text-center">
+          <div class="w-14 h-14 bg-gradient-to-br from-orange-100 to-orange-50 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          </div>
+          <h3 class="text-xl font-bold text-gray-800 mb-2">User Portal</h3>
+          <p class="text-sm text-gray-600 mb-3">Report emergencies or track existing cases with real-time updates</p>
+          <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+            <svg class="mr-1 w-3 h-3" fill="currentColor" viewBox="0 0 8 8">
+              <circle cx="4" cy="4" r="3" />
+            </svg>
+            Public Access
+          </span>
+        </div>
+      </a>
+
+    </div>
+
+    <!-- Emergency Notice -->
+    <div class="mt-8 p-4 bg-red-50 border border-red-100 rounded-lg text-center animate__animated animate__fadeInUp">
+      <p class="text-sm text-red-800 font-medium">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-1" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+        </svg>
+        For life-threatening emergencies, please call <strong>911</strong> immediately
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div class="text-center text-sm text-gray-500 mt-10 pt-6 border-t border-gray-100">
+      <div class="flex justify-center space-x-4 mb-2">
+        <a href="#" class="hover:text-blue-600 transition-colors">Privacy Policy</a>
+        <a href="#" class="hover:text-blue-600 transition-colors">Terms of Service</a>
+        <a href="#" class="hover:text-blue-600 transition-colors">Accessibility</a>
+      </div>
+      <div>
+        &copy; <span id="current-year">2025</span> RexusOps360™ — Louisville Metro Government
+        <div class="mt-1 text-xs text-gray-400">v4.2.1 | Last updated: <span id="current-date-time"></span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Set current year in footer
+    document.getElementById('current-year').textContent = new Date().getFullYear();
+    
+    // Set current date and time
+    const options = { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric', 
+      hour: '2-digit', 
+      minute: '2-digit',
+      timeZoneName: 'short'
+    };
+    document.getElementById('current-date-time').textContent = new Date().toLocaleDateString('en-US', options);
+    
+    // System status simulation
+    setInterval(() => {
+      const statusBadge = document.querySelector('.system-status-badge');
+      if (statusBadge) {
+        statusBadge.classList.toggle('animate-pulse');
+      }
+    }, 5000);
+
+    // Fallback for Tailwind CDN
+    if (typeof tailwind === 'undefined') {
+      console.warn('Tailwind CDN failed to load, using local fallback');
+      document.write('<script src="/static/js/tailwind-fallback.js"><\/script>');
+    }
+  </script>
+  <script src="{{ url_for('static', filename='js/frontend_bridge.js') }}"></script>
+</body>
+</html>

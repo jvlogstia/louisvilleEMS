@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Louisville Metro Emergency — Mission Control</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    :root{
+      --ink:#0f172a;          /* slate-900 */
+      --panel:#0b1220;        /* deep space */
+      --glass:rgba(255,255,255,.06);
+      --sky:#0ea5e9;
+      --alert:#ef4444;
+      --ok:#22c55e;
+      --amber:#f59e0b;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Helvetica Neue',Arial,'Noto Sans',sans-serif;background:radial-gradient(1200px 600px at 10% -20%, rgba(14,165,233,.18), transparent 60%), radial-gradient(900px 500px at 100% 0%, rgba(99,102,241,.15), transparent 60%), linear-gradient(180deg,#0b1020,#070b14 55%, #080a12); color:#e5e7eb}
+
+    /* aurora threads */
+    .aurora:before,.aurora:after{content:"";position:fixed;inset:-20% -10%;background:conic-gradient(from 200deg at 50% 50%, rgba(14,165,233,.05), rgba(236,72,153,.05), rgba(99,102,241,.06), transparent 60%);filter:blur(40px);pointer-events:none;}
+    .aurora:after{transform:rotate(180deg)}
+
+    /* top bar */
+    .bar{backdrop-filter: blur(10px); background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)); border-bottom:1px solid rgba(255,255,255,.12)}
+
+    /* cards */
+    .card{background:linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03)); border:1px solid rgba(255,255,255,.12); border-radius:16px; box-shadow:0 20px 40px rgba(0,0,0,.25); transition:transform .2s ease, box-shadow .2s ease}
+    .card:hover{transform:translateY(-2px); box-shadow:0 30px 60px rgba(0,0,0,.35)}
+
+    /* big CTA */
+    .cta{background:linear-gradient(135deg, #ef4444, #f59e0b); box-shadow:0 15px 35px rgba(239,68,68,.35);}
+    .cta:active{transform:translateY(1px)}
+
+    /* sonar ping chip */
+    .ping{position:relative}
+    .ping:after{content:""; position:absolute; inset:-6px; border-radius:9999px; border:2px solid currentColor; opacity:.5; animation:ping 1.6s cubic-bezier(0,0,.2,1) infinite}
+    @keyframes ping{0%{transform:scale(.8);opacity:.6} 80%,100%{transform:scale(1.8);opacity:0}}
+
+    /* map container */
+    .map{height:520px; border-radius:16px; overflow:hidden; border:1px solid rgba(255,255,255,.12); box-shadow:0 10px 30px rgba(0,0,0,.25)}
+
+    /* leaflet popup theming */
+    .leaflet-popup-content-wrapper{border-radius:12px; overflow:hidden}
+    .popup-h{padding:10px 14px; color:#fff; font-weight:800; letter-spacing:.02em}
+    .popup-b{padding:12px 14px; color:#0f172a; background:#fff}
+
+    /* toast */
+    .toast{position:fixed;right:1rem;top:1rem;display:flex;align-items:center;gap:.6rem;background:rgba(17,24,39,.9);border:1px solid rgba(255,255,255,.1);color:#fff;padding:.7rem 1rem;border-radius:.75rem;box-shadow:0 10px 25px rgba(0,0,0,.35);transform:translateX(120%);transition:transform .35s cubic-bezier(.2,.8,.2,1);z-index:9999}
+    .toast.show{transform:translateX(0)}
+
+    /* fun microinteractions */
+    .tilt{transform-style:preserve-3d}
+    .tilt:hover .tilt-emoji{transform:translateZ(12px) rotate(-6deg)}
+
+    /* keyboard badge */
+    kbd{font-family:'JetBrains Mono',monospace; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); padding:.15rem .4rem; border-radius:.4rem}
+
+    /* screenreader helper */
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  </style>
+</head>
+<body class="aurora">
+  <!-- Top Bar -->
+  <header class="bar sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <span class="text-2xl ping" aria-hidden="true">🚨</span>
+        <div>
+          <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight">Louisville Emergency — <span class="text-sky-400">Mission Control</span></h1>
+          <p class="text-xs opacity-80">Keyboard: <kbd>R</kbd> report • <kbd>V</kbd> view • <kbd>M</kbd> map ping</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="hidden sm:flex items-center gap-3 text-sm opacity-90">
+          <span id="date" class="flex items-center gap-1"><i class="fa-solid fa-calendar-day"></i><span id="date-txt">—</span></span>
+          <span class="opacity-50">•</span>
+          <span id="time" class="flex items-center gap-1"><i class="fa-solid fa-clock"></i><span id="time-txt">—</span></span>
+          <span class="opacity-50">•</span>
+          <span id="wx" class="flex items-center gap-1"><i id="wx-ico" class="fa-solid fa-sun"></i><span id="wx-txt">—</span></span>
+        </div>
+        <button id="reset" class="px-3 py-2 rounded-md border border-white/15 hover:bg-white/10">Reset</button>
+        <a href="/" class="px-3 py-2 rounded-md border border-white/15 hover:bg-white/10"><i class="fa-solid fa-right-from-bracket mr-1"></i>Logout</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-8 space-y-8">
+    <!-- Status Row -->
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="card tilt p-5 flex items-center gap-4">
+        <div class="text-sky-400 text-2xl tilt-emoji">📡</div>
+        <div>
+          <p class="text-sky-300/80 text-xs font-semibold tracking-wide">ACTIVE INCIDENTS</p>
+          <p id="stat-active" class="text-3xl font-black">0</p>
+        </div>
+      </div>
+      <div class="card tilt p-5 flex items-center gap-4">
+        <div class="text-green-400 text-2xl tilt-emoji">🛟</div>
+        <div>
+          <p class="text-green-300/80 text-xs font-semibold tracking-wide">RESOLVED TODAY</p>
+          <p id="stat-resolved" class="text-3xl font-black">0</p>
+        </div>
+      </div>
+      <div class="card tilt p-5 flex items-center gap-4">
+        <div class="text-amber-300 text-2xl tilt-emoji">👩‍🚒</div>
+        <div>
+          <p class="text-amber-200/80 text-xs font-semibold tracking-wide">RESPONDERS ACTIVE</p>
+          <p id="stat-responders" class="text-3xl font-black">0</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Action Row -->
+    <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <button id="btn-report" class="card cta p-6 text-left">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-2xl font-extrabold">Report New Emergency</h2>
+            <p class="opacity-80 text-sm">Opens the quick mission sheet. <span class="ml-2"><kbd>R</kbd></span></p>
+          </div>
+          <span class="text-3xl">➕</span>
+        </div>
+      </button>
+      <button id="btn-view" class="card p-6 text-left">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-2xl font-extrabold">View Your Reports</h2>
+            <p class="opacity-80 text-sm">Filter & paginate submissions. <span class="ml-2"><kbd>V</kbd></span></p>
+          </div>
+          <span class="text-3xl">📋</span>
+        </div>
+      </button>
+    </section>
+
+    <!-- Map -->
+    <section class="space-y-3">
+      <div class="flex items-center justify-between">
+        <h3 class="text-xl font-extrabold">Live Incident Map</h3>
+        <div class="flex items-center gap-2">
+          <button id="btn-ping" class="px-3 py-2 rounded-md border border-white/15 hover:bg-white/10"><i class="fa-solid fa-bullseye mr-1"></i>Ping</button>
+          <button id="btn-refresh-map" class="px-3 py-2 rounded-md border border-white/15 hover:bg-white/10"><i class="fa-solid fa-rotate"></i></button>
+        </div>
+      </div>
+      <div id="map" class="map" aria-label="Map showing active emergency incidents"></div>
+    </section>
+
+    <!-- Quick Mission Sheet (collapsible) -->
+    <section id="sheet" class="hidden card overflow-hidden">
+      <div class="grid md:grid-cols-2 gap-0">
+        <div class="p-6 space-y-4">
+          <h4 class="text-lg font-extrabold">Mission Sheet</h4>
+          <label class="block text-sm">Your Name
+            <input id="name" class="mt-1 w-full px-3 py-2 rounded-md bg-white/90 text-slate-900" placeholder="Jane Smith" required>
+          </label>
+          <label class="block text-sm">Phone
+            <input id="phone" class="mt-1 w-full px-3 py-2 rounded-md bg-white/90 text-slate-900" placeholder="502-555-1234" required>
+          </label>
+          <label class="block text-sm">Type
+            <select id="etype" class="mt-1 w-full px-3 py-2 rounded-md bg-white/90 text-slate-900" required>
+              <option value="">Select…</option>
+              <optgroup label="Weather">
+                <option>Flash Flood Warning</option>
+                <option>Severe Thunderstorm</option>
+                <option>Tornado</option>
+              </optgroup>
+              <optgroup label="Public Safety">
+                <option>Building Collapse</option>
+                <option>Gas Leak</option>
+                <option>Chemical Spill</option>
+              </optgroup>
+              <optgroup label="Medical">
+                <option>Medical Emergency</option>
+                <option>Mass Casualty Incident</option>
+              </optgroup>
+              <optgroup label="Infrastructure">
+                <option>Power Outage</option>
+                <option>Water Main Break</option>
+              </optgroup>
+              <option>Other Emergency</option>
+            </select>
+          </label>
+          <label class="block text-sm">Severity <span id="sev-val" class="ml-2 text-sky-300 font-bold">5</span>
+            <input id="sev" type="range" min="1" max="10" value="5" class="mt-2 w-full">
+          </label>
+        </div>
+        <div class="p-6 space-y-4 bg-white/5">
+          <label class="block text-sm">Neighborhood / Place
+            <input id="place" class="mt-1 w-full px-3 py-2 rounded-md bg-white/90 text-slate-900" placeholder="Downtown Louisville" required>
+          </label>
+          <label class="block text-sm">Address (optional)
+            <input id="addr" class="mt-1 w-full px-3 py-2 rounded-md bg-white/90 text-slate-900" placeholder="123 Main St">
+          </label>
+          <label class="block text-sm">Description
+            <textarea id="desc" rows="4" class="mt-1 w-full px-3 py-2 rounded-md bg-white/90 text-slate-900" placeholder="What happened?" required></textarea>
+          </label>
+          <div class="flex justify-end gap-2">
+            <button id="sheet-cancel" class="px-4 py-2 rounded-md border border-white/15 hover:bg-white/10">Cancel</button>
+            <button id="sheet-save" class="px-4 py-2 rounded-md bg-sky-500 hover:bg-sky-600 text-white font-bold">Submit</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Your Reports -->
+    <section id="reports" class="hidden space-y-4">
+      <div class="flex items-center justify-between">
+        <h4 class="text-lg font-extrabold">Your Reports</h4>
+        <div class="flex items-center gap-2">
+          <select id="filter" class="px-2 py-1 rounded-md bg-white/10 border border-white/15">
+            <option value="all">All</option>
+            <option value="pending">Pending</option>
+            <option value="resolved">Resolved</option>
+          </select>
+          <button id="refresh-reports" class="px-3 py-2 rounded-md border border-white/15 hover:bg-white/10"><i class="fa-solid fa-rotate"></i></button>
+        </div>
+      </div>
+      <div class="card overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="min-w-full">
+            <thead class="bg-white/5">
+              <tr>
+                <th class="text-left px-4 py-3 text-xs">Type</th>
+                <th class="text-left px-4 py-3 text-xs">Severity</th>
+                <th class="text-left px-4 py-3 text-xs">Location</th>
+                <th class="text-left px-4 py-3 text-xs">Reported</th>
+                <th class="text-left px-4 py-3 text-xs">Status</th>
+                <th class="text-left px-4 py-3 text-xs">Response</th>
+                <th class="text-left px-4 py-3 text-xs">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tbl" class="divide-y divide-white/10"></tbody>
+          </table>
+        </div>
+        <div class="flex items-center justify-between p-3 bg-white/5 border-t border-white/10">
+          <div id="rcount" class="text-xs opacity-80">—</div>
+          <div class="flex items-center gap-1" id="pager"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Toast -->
+  <div id="toast" class="toast" role="status" aria-live="polite"><i class="fa-solid fa-circle-info"></i><span id="toast-txt">Ready</span></div>
+
+  <script>
+  // ====== Model & Storage ======
+  const STORAGE_KEY = 'louisvilleIncidents';
+  const currentUser = { name:'John Doe', phone:'502-555-1234' };
+
+  function read(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]'); }catch{ return []; } }
+  function write(v){ localStorage.setItem(STORAGE_KEY, JSON.stringify(v||[])); }
+
+  // ====== Time & Weather (whimsical) ======
+  function tick(){ const n=new Date(); document.getElementById('date-txt').textContent=n.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'}); document.getElementById('time-txt').textContent=n.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}); }
+  function weather(){ const opts=[{i:'fa-sun',t:'Sunny 72°F'},{i:'fa-cloud',t:'Cloudy 68°F'},{i:'fa-cloud-rain',t:'Rain 65°F'},{i:'fa-bolt',t:'Stormy 70°F'}]; const w=opts[Math.floor(Math.random()*opts.length)]; const ico=document.getElementById('wx-ico'); ico.className='fa-solid '+w.i; document.getElementById('wx-txt').textContent=w.t; }
+
+  // ====== Map ======
+  let map; let markerLayer;
+  const NEIGHBORHOOD = {
+    "Downtown Louisville": [38.256,-85.756], "East End": [38.280,-85.570], "South End":[38.130,-85.770], "West End":[38.260,-85.820],
+    "Old Louisville":[38.227,-85.758], "Highlands":[38.236,-85.708], "St. Matthews":[38.252,-85.651], "Jeffersontown":[38.194,-85.564],
+    "Okolona":[38.141,-85.687], "Pleasure Ridge Park":[38.145,-85.848], "Shively":[38.200,-85.819], "Newburg":[38.172,-85.683],
+    "Portland":[38.269,-85.789], "Entire Louisville Metro":[38.2527,-85.7585],
+    "Jefferson County":[38.2527,-85.7585], "Oldham County":[38.397,-85.448], "Shelby County":[38.210,-85.189], "Bullitt County":[37.996,-85.684],
+    "Nelson County":[37.773,-85.467], "Clark County, IN":[38.337,-85.735], "Floyd County, IN":[38.285,-85.824], "Harrison County, IN":[38.212,-86.121],
+    "Washington County, IN":[38.606,-86.101],
+    "Louisville International Airport (SDF)": [38.174,-85.736], "UofL Belknap Campus":[38.215,-85.760], "UofL Health Sciences Campus":[38.249,-85.749],
+    "Churchill Downs":[38.202,-85.771], "Kentucky Exposition Center":[38.198,-85.739], "Waterfront Park":[38.260,-85.743], "Ohio River Bridges":[38.258,-85.741]
+  };
+
+  function seededOffset(seed, axis){
+    const str=String(seed)+':'+axis; let h=5381; for(let i=0;i<str.length;i++){ h=((h<<5)+h) ^ str.charCodeAt(i); }
+    const u=(h>>>0)/4294967295; // 0..1
+    return (u*0.008)-0.004; // +/- ~0.004 deg (~400m)
+  }
+  function incidentLatLng(incident){
+    if (Number.isFinite(incident.lat) && Number.isFinite(incident.lng)) return [incident.lat, incident.lng];
+    const base = NEIGHBORHOOD[incident.address] || NEIGHBORHOOD[incident.neighborhood] || [38.2527,-85.7585];
+    return [ base[0]+seededOffset(incident.id,'x'), base[1]+seededOffset(incident.id,'y') ];
+  }
+
+  function colorFor(type){
+    const m={'Tornado':'#8B0000','Severe Thunderstorm':'#4B0082','Flash Flood Warning':'#006994','Hailstorm':'#4682B4','Winter Storm':'#B0E0E6','Major Traffic Accident':'#FF8C00','Gas Leak':'#DAA520','Chemical Spill':'#556B2F','Building Collapse':'#8B4513','Medical Emergency':'#006400','Mass Casualty Incident':'#800000','Power Outage':'#696969','Water Main Break':'#1E90FF','Other Emergency':'#6A5ACD'};
+    return m[type] || '#6A5ACD';
+  }
+  function abbr(type){ const w=String(type).trim().split(/\s+/); return w.length===1? w[0].slice(0,2).toUpperCase(): w.map(s=>s[0]).join('').toUpperCase(); }
+
+  function renderMap(){
+    if(!map){ map=L.map('map',{zoomControl:true}).setView([38.2527,-85.7585],12); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(map); markerLayer=L.layerGroup().addTo(map); map.zoomControl.setPosition('topright'); }
+    markerLayer.clearLayers();
+
+    const list = read().filter(i=>!i.resolved);
+    document.getElementById('stat-active').textContent = list.length;
+
+    list.forEach(it=>{
+      const [lat,lng]=incidentLatLng(it); const color=colorFor(it.type);
+      const icon=L.divIcon({className:'', html:`<div style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;background:${color};box-shadow:0 6px 16px rgba(0,0,0,.35)">${abbr(it.type)}</div>`});
+      const m=L.marker([lat,lng],{icon, alt:`${it.type} at ${it.address}`}).addTo(markerLayer);
+      // sonar ring
+      const ring=L.circle([lat,lng],{radius:150, color:color, weight:1, fillColor:color, fillOpacity:.08}).addTo(markerLayer);
+      setInterval(()=>{ let o=0.2; let r=80; const si=setInterval(()=>{ r+=12; o-=.02; ring.setStyle({fillOpacity:Math.max(0,o)}); ring.setRadius(r); if(o<=0){ clearInterval(si); ring.setRadius(150); ring.setStyle({fillOpacity:.08}); } }, 30); }, 1600);
+
+      const pop=`<div class="popup-h" style="background:${color}">${(it.type||'').toUpperCase()}</div>
+                 <div class="popup-b"><p><strong>Location:</strong> ${it.address}</p>
+                 <p><strong>Severity:</strong> ${it.severity}/10</p>
+                 <p><strong>Reported:</strong> ${fmt(it.timestamp)}</p>
+                 ${it.description? `<p class="mt-2"><strong>Details:</strong> ${it.description.slice(0,120)}${it.description.length>120?'…':''}</p>`:''}</div>`;
+      m.bindPopup(pop);
+    });
+  }
+
+  // ====== Reports Table ======
+  let curFilter='all', page=1; const per=5;
+  function digits(s){return String(s||'').replace(/\D/g,'');}
+  function mine(all){ const me=digits(currentUser.phone).slice(-10); return all.filter(i=> (i.name===currentUser.name) || digits(i.phone).endsWith(me)); }
+  function rows(){ let arr=mine(read()); if(curFilter==='pending') arr=arr.filter(i=>!i.resolved); if(curFilter==='resolved') arr=arr.filter(i=>i.resolved); return arr.sort((a,b)=> new Date(b.timestamp)-new Date(a.timestamp)); }
+  function renderReports(){ const body=document.getElementById('tbl'); const pag=document.getElementById('pager'); const rc=document.getElementById('rcount'); body.innerHTML=''; pag.innerHTML=''; const data=rows(); if(!data.length){ rc.textContent='No reports'; return; } const total=data.length; const pages=Math.max(1, Math.ceil(total/per)); page=Math.min(page,pages); const slice=data.slice((page-1)*per, (page-1)*per+per); rc.textContent=`Showing ${(page-1)*per+1}–${Math.min(page*per,total)} of ${total}`; slice.forEach(it=>{ const tr=document.createElement('tr'); const sevClass=it.severity<=3?'bg-green-500':'bg-yellow-400'; const sevClass2=it.severity>=7?'bg-red-500':sevClass; tr.innerHTML=`<td class="px-4 py-3 text-sm">${it.type}</td>
+      <td class="px-4 py-3 text-sm"><span class="inline-block w-24 h-2 rounded ${sevClass2}"></span> <span class="ml-2">${it.severity}/10</span></td>
+      <td class="px-4 py-3 text-sm">${it.address}</td>
+      <td class="px-4 py-3 text-sm">${fmt(it.timestamp)}</td>
+      <td class="px-4 py-3 text-sm"><span class="px-2 py-1 text-xs rounded ${it.resolved?'bg-green-600':'bg-amber-500'}">${it.resolved?'Resolved':'Pending'}</span></td>
+      <td class="px-4 py-3 text-sm">${it.adminReply? `<span class='opacity-80'>${it.adminReply.slice(0,28)}${it.adminReply.length>28?'…':''}</span>`:'—'}</td>
+      <td class="px-4 py-3 text-sm"><button class="px-2 py-1 rounded border border-white/15 hover:bg-white/10" data-view="${it.id}">View</button></td>`; body.appendChild(tr); });
+      // pager
+      for(let i=1;i<=pages;i++){ const b=document.createElement('button'); b.textContent=i; b.className=`px-2 py-1 rounded ${i===page?'bg-white/15':'border border-white/10 hover:bg-white/10'}`; b.addEventListener('click',()=>{page=i; renderReports();}); pag.appendChild(b);} }
+
+  // ====== Helpers ======
+  function fmt(ts){ const d=new Date(ts); return d.toLocaleDateString()+" "+d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+  function toast(msg,icon='fa-circle-info'){ const t=document.getElementById('toast'); document.getElementById('toast-txt').textContent=msg; t.querySelector('i').className='fa-solid '+icon; t.classList.add('show'); setTimeout(()=> t.classList.remove('show'), 2200); }
+
+  // ====== App Wiring ======
+  document.getElementById('btn-report').addEventListener('click',()=>{ document.getElementById('sheet').classList.remove('hidden'); document.getElementById('reports').classList.add('hidden'); document.getElementById('name').focus(); });
+  document.getElementById('btn-view').addEventListener('click',()=>{ document.getElementById('reports').classList.remove('hidden'); document.getElementById('sheet').classList.add('hidden'); renderReports(); });
+  document.getElementById('sheet-cancel').addEventListener('click',()=> document.getElementById('sheet').classList.add('hidden'));
+  document.getElementById('sheet-save').addEventListener('click',()=>{
+    const name=document.getElementById('name').value.trim();
+    const phone=document.getElementById('phone').value.trim();
+    const type=document.getElementById('etype').value;
+    const severity=Number(document.getElementById('sev').value);
+    const neighborhood=document.getElementById('place').value.trim();
+    const address=document.getElementById('addr').value.trim() || neighborhood;
+    const description=document.getElementById('desc').value.trim();
+    if(!name||!phone||!type||!neighborhood||!description){ toast('Please complete all required fields','fa-circle-exclamation'); return; }
+    const item={ id:Date.now(), name, phone, type, severity, neighborhood, address, description, timestamp:new Date().toISOString(), resolved:false };
+    const list=read(); list.push(item); write(list);
+    document.getElementById('sheet').classList.add('hidden');
+    renderMap(); renderReports(); stats(); toast('Report submitted','fa-circle-check'); confetti();
+  });
+
+  // Keybinds
+  window.addEventListener('keydown', (e)=>{ if(e.key==='r' || e.key==='R') document.getElementById('btn-report').click(); if(e.key==='v'||e.key==='V') document.getElementById('btn-view').click(); if(e.key==='m'||e.key==='M') document.getElementById('btn-ping').click(); });
+
+  // Filter & refresh
+  document.getElementById('filter').addEventListener('change',(e)=>{ curFilter=e.target.value; page=1; renderReports(); });
+  document.getElementById('refresh-reports').addEventListener('click',()=>{ renderReports(); toast('Reports refreshed') });
+
+  // Map buttons
+  document.getElementById('btn-refresh-map').addEventListener('click',()=>{ renderMap(); toast('Map refreshed') });
+  document.getElementById('btn-ping').addEventListener('click',()=>{ const l=read().filter(i=>!i.resolved); if(!l.length) return; const [lat,lng]=incidentLatLng(l[0]); map.setView([lat,lng],13,{animate:true}); toast('Focused first active incident','fa-bullseye'); });
+
+  // Reset
+  document.getElementById('reset').addEventListener('click',()=>{ localStorage.removeItem(STORAGE_KEY); renderMap(); renderReports(); stats(); toast('Local storage cleared','fa-triangle-exclamation'); });
+
+  // Stats
+  function stats(){ const arr=read(); const today=new Date().toISOString().split('T')[0]; const resolvedToday=arr.filter(i=>i.resolved && i.resolvedTimestamp && i.resolvedTimestamp.split('T')[0]===today).length; document.getElementById('stat-resolved').textContent=resolvedToday; document.getElementById('stat-responders').textContent=Math.max(0, Math.min(99, arr.filter(i=>!i.resolved).length*3 + 5)); }
+
+  // Confetti (tiny vanilla)
+  function confetti(){ const n=40; for(let i=0;i<n;i++){ const s=document.createElement('span'); s.textContent='✦'; s.style.position='fixed'; s.style.zIndex=9999; s.style.left=(Math.random()*100)+'vw'; s.style.top='-10px'; s.style.fontSize=(Math.random()*12+10)+'px'; s.style.transition='transform 1.8s ease, opacity 1.8s ease'; document.body.appendChild(s); requestAnimationFrame(()=>{ s.style.transform=`translateY(${Math.random()*80+60}vh) rotate(${Math.random()*360}deg)`; s.style.opacity='0'; }); setTimeout(()=> s.remove(), 1900); } }
+
+  // Boot
+  document.addEventListener('DOMContentLoaded', ()=>{
+    tick(); setInterval(tick,60_000); weather(); renderMap(); renderReports(); stats();
+    document.getElementById('sev').addEventListener('input', (e)=> document.getElementById('sev-val').textContent=e.target.value );
+  });
+  </script>
+</body>
+</html>

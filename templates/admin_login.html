@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Admin Login | RexusOps360™</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="same-origin" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <style>
+    :root{
+      --primary:#00008b; --primary-dark:#00008b; --secondary:#00cec9;
+      --dark:#2d3436; --light:#f5f6fa; --danger:#d63031;
+    }
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{
+      font-family:'Poppins',sans-serif;
+      background:linear-gradient(135deg,#f5f7fa 0%,#c3cfe2 100%);
+      min-height:100vh;display:flex;justify-content:center;align-items:center;
+      overflow:hidden;position:relative;
+    }
+    .particle{position:absolute;border-radius:50%;background:rgba(108,92,231,.2);pointer-events:none}
+    .login-container{
+      position:relative;width:380px;background:#fff;border-radius:20px;overflow:hidden;z-index:10;
+      box-shadow:0 15px 35px rgba(0,0,0,.1);animation:fadeInUp 1s ease-out forwards;opacity:0;
+    }
+    .login-header{background:var(--primary);padding:30px 0;text-align:center;color:#fff;position:relative;overflow:hidden}
+    .login-header::before{
+      content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;
+      background:radial-gradient(circle,rgba(255,255,255,.2) 0%,rgba(255,255,255,0) 70%);
+      transform:rotate(30deg);animation:shine 3s infinite;
+    }
+    .logo{width:80px;height:80px;background:#fff;border-radius:50%;display:inline-flex;justify-content:center;align-items:center;margin-bottom:15px;box-shadow:0 5px 15px rgba(0,0,0,.1)}
+    .logo i{color:var(--primary);font-size:2rem}
+    .login-header h1{font-size:1.8rem;margin-bottom:5px;font-weight:600}
+    .login-header p{font-size:.9rem;opacity:.9}
+    .login-body{padding:30px}
+    .input-group{position:relative;margin-bottom:25px}
+    .input-group i{position:absolute;left:15px;top:50%;transform:translateY(-50%);color:var(--primary);font-size:1.1rem}
+    .input-group input{
+      width:100%;padding:15px 15px 15px 45px;border:2px solid #e0e0e0;border-radius:10px;font-size:1rem;transition:all .3s;background:#f9f9f9
+    }
+    .input-group input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(108,92,231,.2);background:#fff;outline:none}
+    .input-group label{
+      position:absolute;left:45px;top:15px;color:#999;font-size:1rem;transition:all .3s;pointer-events:none;
+      background:transparent;padding:0 5px
+    }
+    .input-group input:focus+label,
+    .input-group input:not(:placeholder-shown)+label{
+      top:-10px;left:35px;font-size:.8rem;background:#fff;color:var(--primary)
+    }
+    .login-btn{
+      width:100%;padding:15px;background:var(--primary);color:#fff;border:none;border-radius:10px;
+      font-size:1rem;font-weight:600;cursor:pointer;transition:all .3s;display:flex;justify-content:center;align-items:center;gap:10px;
+      box-shadow:0 5px 15px rgba(0,0,139,.35);animation:pulse 2.5s infinite
+    }
+    .login-btn:hover{background:var(--primary-dark);transform:translateY(-2px);box-shadow:0 7px 20px rgba(0,0,139,.45)}
+    .login-btn:active{transform:translateY(0)}
+    .login-footer{text-align:center;padding:20px;font-size:.8rem;color:#999;border-top:1px solid #eee}
+    .error-message{
+      background:#ffebee;color:var(--danger);padding:15px;border-radius:10px;margin-bottom:20px;display:none;
+      align-items:center;gap:10px;border-left:4px solid var(--danger)
+    }
+    .error-message.show{display:flex}
+    .bg-element{position:absolute;border-radius:50%;opacity:.1;z-index:-1}
+    .bg-element-1{width:300px;height:300px;background:var(--primary);top:-100px;right:-100px}
+    .bg-element-2{width:200px;height:200px;background:var(--secondary);bottom:-50px;left:-50px}
+
+    @keyframes shine{0%{transform:rotate(30deg) translate(-10%,-10%)}100%{transform:rotate(30deg) translate(10%,10%)}}
+    @keyframes fadeInUp{0%{transform:translateY(50px);opacity:0}100%{transform:translateY(0);opacity:1}}
+    @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,0,139,.5)}50%{box-shadow:0 0 0 10px rgba(0,0,139,0)}}
+    @keyframes float{
+      0%,100%{transform:translateY(0) translateX(0)}
+      25%{transform:translateY(-20px) translateX(10px)}
+      50%{transform:translateY(0) translateX(20px)}
+      75%{transform:translateY(20px) translateX(10px)}
+    }
+    @keyframes shake{
+      0%,100%{transform:translateX(0)}
+      10%,30%,50%,70%,90%{transform:translateX(-5px)}
+      20%,40%,60%,80%{transform:translateX(5px)}
+    }
+    @media (max-width:480px){.login-container{width:90%}}
+  </style>
+</head>
+<body>
+  <div class="bg-element bg-element-1"></div>
+  <div class="bg-element bg-element-2"></div>
+
+  <div class="login-container" id="loginContainer" role="dialog" aria-labelledby="loginTitle" aria-describedby="loginDesc">
+    <div class="login-header">
+      <div class="logo" aria-hidden="true"><i class="fas fa-user-shield"></i></div>
+      <h1 id="loginTitle">Admin Portal</h1>
+      <p id="loginDesc">RexusOps360™ Management System</p>
+    </div>
+
+    <div class="login-body">
+      <div id="errorMessage" class="error-message" role="alert" aria-live="assertive">
+        <i class="fas fa-exclamation-circle"></i>
+        <span id="errorText">Invalid credentials. Please try again.</span>
+      </div>
+
+      <!-- Use a real <form> so Enter key submits and browser can help -->
+      <form id="loginForm" action="/admin/login" method="post" novalidate>
+        <div class="input-group">
+          <i class="fas fa-id-card" aria-hidden="true"></i>
+          <input
+            id="emp_id"
+            name="username"
+            type="username"
+            placeholder=" "
+            required
+            aria-required="true"
+            />
+            <label for="username">Username</label>
+        </div>
+
+        <div class="input-group">
+          <i class="fas fa-lock" aria-hidden="true"></i>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            placeholder=" "
+            required
+            aria-required="true"
+          />
+          <label for="password">Password</label>
+        </div>
+
+        <button id="loginBtn" class="login-btn" type="submit">
+          <i class="fas fa-sign-in-alt" aria-hidden="true"></i>
+          Login
+        </button>
+      </form>
+    </div>
+
+    <div class="login-footer">
+      &copy; 2025 RexusOps360™ — Restricted Access
+    </div>
+  </div>
+
+  <script>
+    // ---- visuals: particles (1 definition, no duplicates) ----
+    (function createParticles(){
+      const colors = ['#6c5ce7','#00cec9','#fd79a8','#fdcb6e'];
+      for(let i=0;i<15;i++){
+        const p=document.createElement('div');
+        p.className='particle';
+        const size=Math.random()*20+5;
+        p.style.width=size+'px';
+        p.style.height=size+'px';
+        p.style.left=(Math.random()*window.innerWidth)+'px';
+        p.style.top=(Math.random()*window.innerHeight)+'px';
+        p.style.background=colors[Math.floor(Math.random()*colors.length)];
+        p.style.opacity=(Math.random()*0.3+0.1).toFixed(2);
+        p.style.animation=`float ${Math.random()*20+10}s ease-in-out ${Math.random()*5}s infinite`;
+        document.body.appendChild(p);
+      }
+    })();
+
+    // ---- login: single handler, clean errors, Flask-friendly fetch ----
+    document.addEventListener('DOMContentLoaded', () => {
+      const form = document.getElementById('loginForm');
+      const loginContainer = document.getElementById('loginContainer');
+      const errorBox = document.getElementById('errorMessage');
+      const errorText = document.getElementById('errorText');
+
+      function showError(msg){
+        errorText.textContent = msg || 'Login failed.';
+        errorBox.classList.add('show');
+        loginContainer.style.animation = 'shake .5s';
+        setTimeout(()=>{ loginContainer.style.animation=''; }, 500);
+      }
+      function hideError(){ errorBox.classList.remove('show'); }
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        hideError();
+
+        // build x-www-form-urlencoded body (Flask-friendly)
+        const fd = new FormData(form);
+        const body = new URLSearchParams(fd);
+
+        try {
+          const res = await fetch(form.action, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+              'X-Requested-With': 'XMLHttpRequest',
+              // Include CSRF header if your app injects it on window.csrfToken
+              ...(window.csrfToken ? {'X-CSRFToken': window.csrfToken} : {})
+            },
+            body,
+            credentials: 'same-origin' // send cookies / session
+          });
+
+          // try to parse JSON even on non-2xx, then branch
+          let data = null;
+          try { data = await res.json(); } catch { /* non-JSON */ }
+
+          if (!res.ok) {
+            showError((data && (data.message || data.error)) || `HTTP ${res.status}`);
+            return;
+          }
+          if (data && data.success) {
+            const target = data.redirect || '/admin/dashboard';
+            window.location.href = target;
+            return;
+          }
+          showError((data && (data.message || data.error)) || 'Invalid credentials. Please try again.');
+        } catch (err) {
+          showError(err && err.message ? err.message : 'Network error. Please try again.');
+        }
+      });
+
+      // label color nicety
+      document.querySelectorAll('.input-group input').forEach(input=>{
+        input.addEventListener('focus',function(){
+          const label=this.parentNode.querySelector('label');
+          if (label) label.style.color='var(--primary)';
+        });
+        input.addEventListener('blur',function(){
+          const label=this.parentNode.querySelector('label');
+          if (label && !this.value) label.style.color='#999';
+        });
+      });
+    });
+  </script>
+</body>
+</html>

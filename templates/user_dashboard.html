@@ -3,391 +3,1221 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Louisville Metro Emergency — Mission Control</title>
+  <title>Louisville Metro Emergency Response System</title>
 
   <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Fonts & Icons -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <!-- Font Awesome 6 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
-    :root{
-      --ink:#0f172a;          /* slate-900 */
-      --panel:#0b1220;        /* deep space */
-      --glass:rgba(255,255,255,.06);
-      --sky:#0ea5e9;
-      --alert:#ef4444;
-      --ok:#22c55e;
-      --amber:#f59e0b;
+    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Rubik:wght@400;500;600;700&display=swap');
+
+    :root {
+      --primary-color: #0056b3;
+      --secondary-color: #6c757d;
+      --danger-color: #dc3545;
+      --warning-color: #ffc107;
+      --success-color: #28a745;
+      --emergency-red: #e63946;
     }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Helvetica Neue',Arial,'Noto Sans',sans-serif;background:radial-gradient(1200px 600px at 10% -20%, rgba(14,165,233,.18), transparent 60%), radial-gradient(900px 500px at 100% 0%, rgba(99,102,241,.15), transparent 60%), linear-gradient(180deg,#0b1020,#070b14 55%, #080a12); color:#e5e7eb}
 
-    /* aurora threads */
-    .aurora:before,.aurora:after{content:"";position:fixed;inset:-20% -10%;background:conic-gradient(from 200deg at 50% 50%, rgba(14,165,233,.05), rgba(236,72,153,.05), rgba(99,102,241,.06), transparent 60%);filter:blur(40px);pointer-events:none;}
-    .aurora:after{transform:rotate(180deg)}
+    body { font-family: 'Roboto', sans-serif; background-color: #f8f9fa; }
+    .font-rubik { font-family: 'Rubik', sans-serif; }
 
-    /* top bar */
-    .bar{backdrop-filter: blur(10px); background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)); border-bottom:1px solid rgba(255,255,255,.12)}
+    .dashboard-header { background: linear-gradient(135deg, #0a2e52 0%, #1a4b8c 100%); box-shadow: 0 4px 12px rgba(0,0,0,.15); }
 
-    /* cards */
-    .card{background:linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03)); border:1px solid rgba(255,255,255,.12); border-radius:16px; box-shadow:0 20px 40px rgba(0,0,0,.25); transition:transform .2s ease, box-shadow .2s ease}
-    .card:hover{transform:translateY(-2px); box-shadow:0 30px 60px rgba(0,0,0,.35)}
+    .emergency-btn { background-color: var(--emergency-red); transition: all .3s ease; box-shadow: 0 4px 6px rgba(0,0,0,.1); }
+    .emergency-btn:hover { background-color: #c1121f; transform: translateY(-2px); box-shadow: 0 6px 8px rgba(0,0,0,.15); }
+    .emergency-btn-secondary { background-color: var(--secondary-color); transition: all .3s ease; }
+    .emergency-btn-secondary:hover { background-color: #5a6268; transform: translateY(-2px); }
 
-    /* big CTA */
-    .cta{background:linear-gradient(135deg, #ef4444, #f59e0b); box-shadow:0 15px 35px rgba(239,68,68,.35);}
-    .cta:active{transform:translateY(1px)}
+    .map-container { height: 500px; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,.05); border: 1px solid #e0e0e0; }
+    .form-container { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,.08); border: 1px solid #e0e0e0; }
 
-    /* sonar ping chip */
-    .ping{position:relative}
-    .ping:after{content:""; position:absolute; inset:-6px; border-radius:9999px; border:2px solid currentColor; opacity:.5; animation:ping 1.6s cubic-bezier(0,0,.2,1) infinite}
-    @keyframes ping{0%{transform:scale(.8);opacity:.6} 80%,100%{transform:scale(1.8);opacity:0}}
+    .drag-area { border: 2px dashed #ced4da; transition: all .3s; border-radius: 8px; background: #f8f9fa; }
+    .drag-area.active { border-color: var(--primary-color); background-color: rgba(0,86,179,.05); }
 
-    /* map container */
-    .map{height:520px; border-radius:16px; overflow:hidden; border:1px solid rgba(255,255,255,.12); box-shadow:0 10px 30px rgba(0,0,0,.25)}
+    .severity-indicator { height: 10px; border-radius: 5px; margin-right: 8px; }
+    .severity-1-3 { background-color: #28a745; width: 30%; }
+    .severity-4-6 { background-color: #ffc107; width: 60%; }
+    .severity-7-10 { background-color: #dc3545; width: 100%; }
 
-    /* leaflet popup theming */
-    .leaflet-popup-content-wrapper{border-radius:12px; overflow:hidden}
-    .popup-h{padding:10px 14px; color:#fff; font-weight:800; letter-spacing:.02em}
-    .popup-b{padding:12px 14px; color:#0f172a; background:#fff}
+    .notification { position: fixed; top: 20px; right: 20px; padding: 15px 20px; border-radius: 8px; color: #fff; display: flex; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,.15); opacity: 0; transform: translateX(100%); transition: all .3s; z-index: 1000; }
+    .notification.show { opacity: 1; transform: translateX(0); }
+    .notification.success { background: var(--success-color); }
+    .notification.error { background: var(--danger-color); }
+    .notification.warning { background: var(--warning-color); }
 
-    /* toast */
-    .toast{position:fixed;right:1rem;top:1rem;display:flex;align-items:center;gap:.6rem;background:rgba(17,24,39,.9);border:1px solid rgba(255,255,255,.1);color:#fff;padding:.7rem 1rem;border-radius:.75rem;box-shadow:0 10px 25px rgba(0,0,0,.35);transform:translateX(120%);transition:transform .35s cubic-bezier(.2,.8,.2,1);z-index:9999}
-    .toast.show{transform:translateX(0)}
+    .captcha-container { background: #f1f3f5; border-radius: 8px; padding: 20px; position: relative; height: 120px; }
+    .captcha-cloud { position: absolute; width: 80px; height: 60px; background: #fff; border-radius: 50%; box-shadow: 0 4px 6px rgba(0,0,0,.1); top: 30px; left: 50%; transform: translateX(-50%); }
+    .captcha-tornado { position: absolute; width: 40px; height: 40px; background: #6c757d; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; cursor: grab; transition: all .3s; z-index: 10; top: 20px; left: 20px; }
+    .captcha-tornado:hover { transform: scale(1.1); }
+    .captcha-target { position: absolute; width: 60px; height: 60px; background: #495057; border-radius: 50%; top: 30px; right: 30px; display: flex; align-items: center; justify-content: center; color: #fff; }
 
-    /* fun microinteractions */
-    .tilt{transform-style:preserve-3d}
-    .tilt:hover .tilt-emoji{transform:translateZ(12px) rotate(-6deg)}
+    .emergency-card { transition: all .3s; border-left: 4px solid var(--emergency-red); }
+    .emergency-card:hover { transform: translateY(-3px); box-shadow: 0 6px 12px rgba(0,0,0,.1); }
 
-    /* keyboard badge */
-    kbd{font-family:'JetBrains Mono',monospace; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); padding:.15rem .4rem; border-radius:.4rem}
+    .blink-warning { animation: blink 1.5s infinite; }
+    @keyframes blink { 0%{opacity:1}50%{opacity:.5}100%{opacity:1} }
 
-    /* screenreader helper */
-    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    .custom-icon { display: flex; align-items: center; justify-content: center; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,.3); }
+    .custom-popup .leaflet-popup-content-wrapper { padding: 0; border-radius: 8px; overflow: hidden; }
+    .custom-popup .leaflet-popup-content { margin: 0; width: 250px !important; }
+    .popup-header { padding: 10px 15px; color: #fff; font-weight: bold; }
+    .popup-body { padding: 15px; background: #fff; }
+    .popup-body p { margin-bottom: 8px; }
+    .leaflet-popup-tip { background: #fff; }
+    .emergency-type-icon { font-size: 1.2rem; margin-right: 8px; }
+    .siren-animation { animation: siren .8s infinite alternate; }
+    @keyframes siren { 0%{color:#e63946}100%{color:#f1faee} }
+
+    :focus { outline: 3px solid #0056b3; outline-offset: 2px; }
+
+    @media (max-width: 768px) {
+      .map-container { height: 350px; }
+      .dashboard-header { padding: 10px 0; }
+      .dashboard-header h1 { font-size: 1.2rem; }
+      .dashboard-header .flex.items-center { flex-direction: column; align-items: flex-start; }
+      .dashboard-header .text-sm { font-size: .8rem; }
+    }
   </style>
 </head>
-<body class="aurora">
-  <!-- Top Bar -->
-  <header class="bar sticky top-0 z-40">
-    <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <span class="text-2xl ping" aria-hidden="true">🚨</span>
-        <div>
-          <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight">Louisville Emergency — <span class="text-sky-400">Mission Control</span></h1>
-          <p class="text-xs opacity-80">Keyboard: <kbd>R</kbd> report • <kbd>V</kbd> view • <kbd>M</kbd> map ping</p>
+<body>
+<!-- Emergency Dashboard -->
+<div id="emergency-dashboard" class="min-h-screen bg-gray-100">
+  <header class="dashboard-header text-white shadow-md">
+    <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+      <div>
+        <div class="flex items-center">
+          <i class="fa-solid fa-bell siren-animation text-2xl mr-3" aria-hidden="true"></i>
+          <h1 class="text-2xl font-bold font-rubik">LOUISVILLE METRO EMERGENCY RESPONSE</h1>
+        </div>
+        <div class="flex items-center mt-2">
+          <span id="current-date" class="text-sm flex items-center">
+            <i class="fa-solid fa-calendar-day mr-2" aria-hidden="true"></i>
+            <span id="date-display"></span>
+          </span>
+          <span class="mx-3 text-gray-300">|</span>
+          <span id="current-time" class="text-sm flex items-center">
+            <i class="fa-solid fa-clock mr-2" aria-hidden="true"></i>
+            <span id="time-display"></span>
+          </span>
+          <span class="mx-3 text-gray-300">|</span>
+          <span id="current-weather" class="text-sm flex items-center">
+            <i id="weather-icon" class="fa-solid mr-2" aria-hidden="true"></i>
+            <span id="weather-temp"></span>
+          </span>
         </div>
       </div>
-      <div class="flex items-center gap-3">
-        <div class="hidden sm:flex items-center gap-3 text-sm opacity-90">
-          <span id="date" class="flex items-center gap-1"><i class="fa-solid fa-calendar-day"></i><span id="date-txt">—</span></span>
-          <span class="opacity-50">•</span>
-          <span id="time" class="flex items-center gap-1"><i class="fa-solid fa-clock"></i><span id="time-txt">—</span></span>
-          <span class="opacity-50">•</span>
-          <span id="wx" class="flex items-center gap-1"><i id="wx-ico" class="fa-solid fa-sun"></i><span id="wx-txt">—</span></span>
+      <div class="flex items-center gap-2">
+        <button id="reset-storage-btn" class="bg-white/20 hover:bg-white/30 px-3 py-2 rounded-lg transition flex items-center" aria-label="Reset local storage">
+          <i class="fa-solid fa-rotate mr-2" aria-hidden="true"></i> Reset Storage
+        </button>
+        <div class="mr-4 hidden md:block">
+          <div class="text-sm">Emergency Hotline</div>
+          <div class="font-bold"><i class="fa-solid fa-phone mr-2" aria-hidden="true"></i>911</div>
         </div>
-        <button id="reset" class="px-3 py-2 rounded-md border border-white/15 hover:bg-white/10">Reset</button>
-        <a href="/" class="px-3 py-2 rounded-md border border-white/15 hover:bg-white/10"><i class="fa-solid fa-right-from-bracket mr-1"></i>Logout</a>
+        <a href="home.html" id="logout-btn" class="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg flex items-center transition duration-300">
+          <i class="fa-solid fa-right-from-bracket mr-2" aria-hidden="true"></i> Logout
+        </a>
       </div>
     </div>
   </header>
 
-  <main class="max-w-7xl mx-auto px-4 py-8 space-y-8">
-    <!-- Status Row -->
-    <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div class="card tilt p-5 flex items-center gap-4">
-        <div class="text-sky-400 text-2xl tilt-emoji">📡</div>
+  <main class="container mx-auto px-4 py-8">
+    <!-- Emergency Alert Banner -->
+    <div id="emergency-alert" class="hidden bg-red-600 text-white px-6 py-3 rounded-lg mb-6 flex items-center justify-between blink-warning" role="alert">
+      <div class="flex items-center">
+        <i class="fa-solid fa-triangle-exclamation text-2xl mr-3" aria-hidden="true"></i>
         <div>
-          <p class="text-sky-300/80 text-xs font-semibold tracking-wide">ACTIVE INCIDENTS</p>
-          <p id="stat-active" class="text-3xl font-black">0</p>
+          <h3 class="font-bold" id="alert-title">EMERGENCY ALERT</h3>
+          <p class="text-sm" id="alert-message">Severe weather warning for Louisville Metro area</p>
         </div>
       </div>
-      <div class="card tilt p-5 flex items-center gap-4">
-        <div class="text-green-400 text-2xl tilt-emoji">🛟</div>
-        <div>
-          <p class="text-green-300/80 text-xs font-semibold tracking-wide">RESOLVED TODAY</p>
-          <p id="stat-resolved" class="text-3xl font-black">0</p>
-        </div>
-      </div>
-      <div class="card tilt p-5 flex items-center gap-4">
-        <div class="text-amber-300 text-2xl tilt-emoji">👩‍🚒</div>
-        <div>
-          <p class="text-amber-200/80 text-xs font-semibold tracking-wide">RESPONDERS ACTIVE</p>
-          <p id="stat-responders" class="text-3xl font-black">0</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- Action Row -->
-    <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <button id="btn-report" class="card cta p-6 text-left">
-        <div class="flex items-center justify-between">
-          <div>
-            <h2 class="text-2xl font-extrabold">Report New Emergency</h2>
-            <p class="opacity-80 text-sm">Opens the quick mission sheet. <span class="ml-2"><kbd>R</kbd></span></p>
-          </div>
-          <span class="text-3xl">➕</span>
-        </div>
+      <button id="dismiss-alert" class="text-white hover:text-gray-200" aria-label="Dismiss alert">
+        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
       </button>
-      <button id="btn-view" class="card p-6 text-left">
-        <div class="flex items-center justify-between">
-          <div>
-            <h2 class="text-2xl font-extrabold">View Your Reports</h2>
-            <p class="opacity-80 text-sm">Filter & paginate submissions. <span class="ml-2"><kbd>V</kbd></span></p>
-          </div>
-          <span class="text-3xl">📋</span>
-        </div>
-      </button>
-    </section>
+    </div>
 
-    <!-- Map -->
-    <section class="space-y-3">
-      <div class="flex items-center justify-between">
-        <h3 class="text-xl font-extrabold">Live Incident Map</h3>
-        <div class="flex items-center gap-2">
-          <button id="btn-ping" class="px-3 py-2 rounded-md border border-white/15 hover:bg-white/10"><i class="fa-solid fa-bullseye mr-1"></i>Ping</button>
-          <button id="btn-refresh-map" class="px-3 py-2 rounded-md border border-white/15 hover:bg-white/10"><i class="fa-solid fa-rotate"></i></button>
+    <!-- Quick Stats -->
+    <section aria-labelledby="quick-stats-heading">
+      <h2 id="quick-stats-heading" class="sr-only">Emergency Quick Stats</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="bg-white rounded-lg shadow-md p-6 emergency-card">
+          <div class="flex items-center">
+            <div class="bg-blue-100 p-3 rounded-full mr-4">
+              <i class="fa-solid fa-triangle-exclamation text-blue-600 text-xl" aria-hidden="true"></i>
+            </div>
+            <div>
+              <h3 class="text-gray-500 text-sm font-medium">ACTIVE INCIDENTS</h3>
+              <p class="text-2xl font-bold" id="active-incidents">0</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md p-6 emergency-card">
+          <div class="flex items-center">
+            <div class="bg-green-100 p-3 rounded-full mr-4">
+              <i class="fa-solid fa-circle-check text-green-600 text-xl" aria-hidden="true"></i>
+            </div>
+            <div>
+              <h3 class="text-gray-500 text-sm font-medium">RESOLVED TODAY</h3>
+              <p class="text-2xl font-bold" id="resolved-today">0</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md p-6 emergency-card">
+          <div class="flex items-center">
+            <div class="bg-yellow-100 p-3 rounded-full mr-4">
+              <i class="fa-solid fa-user-shield text-yellow-600 text-xl" aria-hidden="true"></i>
+            </div>
+            <div>
+              <h3 class="text-gray-500 text-sm font-medium">RESPONDERS ACTIVE</h3>
+              <p class="text-2xl font-bold" id="active-responders">0</p>
+            </div>
+          </div>
         </div>
       </div>
-      <div id="map" class="map" aria-label="Map showing active emergency incidents"></div>
     </section>
 
-    <!-- Quick Mission Sheet (collapsible) -->
-    <section id="sheet" class="hidden card overflow-hidden">
-      <div class="grid md:grid-cols-2 gap-0">
-        <div class="p-6 space-y-4">
-          <h4 class="text-lg font-extrabold">Mission Sheet</h4>
-          <label class="block text-sm">Your Name
-            <input id="name" class="mt-1 w-full px-3 py-2 rounded-md bg-white/90 text-slate-900" placeholder="Jane Smith" required>
-          </label>
-          <label class="block text-sm">Phone
-            <input id="phone" class="mt-1 w-full px-3 py-2 rounded-md bg-white/90 text-slate-900" placeholder="502-555-1234" required>
-          </label>
-          <label class="block text-sm">Type
-            <select id="etype" class="mt-1 w-full px-3 py-2 rounded-md bg-white/90 text-slate-900" required>
-              <option value="">Select…</option>
-              <optgroup label="Weather">
-                <option>Flash Flood Warning</option>
-                <option>Severe Thunderstorm</option>
-                <option>Tornado</option>
+    <!-- Action Buttons -->
+    <div class="flex flex-col md:flex-row gap-6 mb-8">
+      <button id="report-emergency-btn" class="emergency-btn text-white font-bold py-4 px-6 rounded-lg flex items-center justify-center transition duration-300 flex-1">
+        <i class="fa-solid fa-circle-plus mr-2 text-xl" aria-hidden="true"></i> REPORT NEW EMERGENCY
+      </button>
+      <button id="view-reports-btn" class="emergency-btn-secondary text-white font-bold py-4 px-6 rounded-lg flex items-center justify-center transition duration-300 flex-1">
+        <i class="fa-solid fa-list-check mr-2 text-xl" aria-hidden="true"></i> VIEW YOUR REPORTS
+      </button>
+    </div>
+
+    <!-- Incident Map -->
+    <section aria-labelledby="incident-map-heading">
+      <div class="bg-white rounded-lg shadow-md overflow-hidden mb-8">
+        <div class="bg-blue-800 text-white px-6 py-4 flex justify-between items-center">
+          <h2 id="incident-map-heading" class="text-xl font-bold"><i class="fa-solid fa-map-location-dot mr-2" aria-hidden="true"></i> ACTIVE INCIDENTS MAP</h2>
+          <button id="refresh-map" class="text-white hover:text-blue-200 transition-colors" aria-label="Refresh map">
+            <i class="fa-solid fa-rotate-right" aria-hidden="true"></i> Refresh
+          </button>
+        </div>
+        <div class="map-container" id="emergency-map" aria-label="Map showing active emergency incidents"></div>
+      </div>
+    </section>
+
+    <!-- Report Emergency Form -->
+    <section aria-labelledby="report-emergency-heading">
+      <div id="report-emergency-form" class="hidden form-container p-6 mb-8">
+        <h2 id="report-emergency-heading" class="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+          <i class="fa-solid fa-triangle-exclamation text-red-600 mr-3" aria-hidden="true"></i>
+          REPORT EMERGENCY INCIDENT
+        </h2>
+
+        <form id="emergency-form">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div>
+              <label for="reporter-name" class="block text-gray-700 font-medium mb-2">Your Name <span class="text-red-600">*</span></label>
+              <input type="text" id="reporter-name" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required aria-required="true">
+            </div>
+            <div>
+              <label for="reporter-phone" class="block text-gray-700 font-medium mb-2">Phone Number <span class="text-red-600">*</span></label>
+              <div class="flex">
+                <select id="country-code" class="w-1/4 px-2 py-2 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required aria-required="true">
+                  <option value="+1">US (+1)</option>
+                  <option value="+44">UK (+44)</option>
+                  <option value="+91">India (+91)</option>
+                </select>
+                <input type="tel" id="reporter-phone" class="w-3/4 px-4 py-2 border border-l-0 border-gray-300 rounded-r-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter phone number" required aria-required="true">
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-6">
+            <label for="emergency-type" class="block text-gray-700 font-medium mb-2">Emergency Type <span class="text-red-600">*</span></label>
+            <select id="emergency-type" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required aria-required="true">
+              <option value="">Select emergency type</option>
+              <optgroup label="Weather Emergencies">
+                <option value="Tornado" data-icon="🌪️">🌪️ Tornado</option>
+                <option value="Severe Thunderstorm" data-icon="⛈️">⛈️ Severe Thunderstorm</option>
+                <option value="Flash Flood Warning" data-icon="🌊">🌊 Flash Flood Warning</option>
+                <option value="Hailstorm" data-icon="🧊">🧊 Hailstorm</option>
+                <option value="Winter Storm" data-icon="❄️">❄️ Winter Storm</option>
               </optgroup>
               <optgroup label="Public Safety">
-                <option>Building Collapse</option>
-                <option>Gas Leak</option>
-                <option>Chemical Spill</option>
+                <option value="Major Traffic Accident" data-icon="🚗">🚗 Major Traffic Accident</option>
+                <option value="Gas Leak" data-icon="⚠️">⚠️ Gas Leak</option>
+                <option value="Chemical Spill" data-icon="☢️">☢️ Chemical Spill</option>
+                <option value="Building Collapse" data-icon="🏚️">🏚️ Building Collapse</option>
               </optgroup>
-              <optgroup label="Medical">
-                <option>Medical Emergency</option>
-                <option>Mass Casualty Incident</option>
+              <optgroup label="Medical Emergencies">
+                <option value="Medical Emergency" data-icon="🚑">🚑 Medical Emergency</option>
+                <option value="Mass Casualty Incident" data-icon="🆘">🆘 Mass Casualty Incident</option>
               </optgroup>
-              <optgroup label="Infrastructure">
-                <option>Power Outage</option>
-                <option>Water Main Break</option>
+              <optgroup label="Other Emergencies">
+                <option value="Power Outage" data-icon="💡">💡 Power Outage</option>
+                <option value="Water Main Break" data-icon="🚰">🚰 Water Main Break</option>
+                <option value="Other Emergency" data-icon="❓">❓ Other Emergency</option>
               </optgroup>
-              <option>Other Emergency</option>
             </select>
-          </label>
-          <label class="block text-sm">Severity <span id="sev-val" class="ml-2 text-sky-300 font-bold">5</span>
-            <input id="sev" type="range" min="1" max="10" value="5" class="mt-2 w-full">
-          </label>
-        </div>
-        <div class="p-6 space-y-4 bg-white/5">
-          <label class="block text-sm">Neighborhood / Place
-            <input id="place" class="mt-1 w-full px-3 py-2 rounded-md bg-white/90 text-slate-900" placeholder="Downtown Louisville" required>
-          </label>
-          <label class="block text-sm">Address (optional)
-            <input id="addr" class="mt-1 w-full px-3 py-2 rounded-md bg-white/90 text-slate-900" placeholder="123 Main St">
-          </label>
-          <label class="block text-sm">Description
-            <textarea id="desc" rows="4" class="mt-1 w-full px-3 py-2 rounded-md bg-white/90 text-slate-900" placeholder="What happened?" required></textarea>
-          </label>
-          <div class="flex justify-end gap-2">
-            <button id="sheet-cancel" class="px-4 py-2 rounded-md border border-white/15 hover:bg-white/10">Cancel</button>
-            <button id="sheet-save" class="px-4 py-2 rounded-md bg-sky-500 hover:bg-sky-600 text-white font-bold">Submit</button>
           </div>
-        </div>
+
+          <div class="mb-6">
+            <label for="severity" class="block text-gray-700 font-medium mb-2">Severity Level (1-10) <span class="text-red-600">*</span></label>
+            <div class="flex items-center">
+              <input type="range" id="severity" min="1" max="10" value="5" class="w-full mr-4" required aria-required="true">
+              <span id="severity-value" class="text-lg font-bold">5</span>
+            </div>
+            <div class="flex justify-between text-xs text-gray-500 mt-1">
+              <span>Low</span><span>Medium</span><span>High</span>
+            </div>
+          </div>
+
+          <div class="mb-6">
+            <label for="emergency-neighborhood" class="block text-gray-700 font-medium mb-2">Location in Louisville <span class="text-red-600">*</span></label>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <select id="emergency-neighborhood" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required aria-required="true">
+                <option value="">Select neighborhood</option>
+                <option>Downtown Louisville</option>
+                <option>East End</option>
+                <option>South End</option>
+                <option>West End</option>
+                <option>Old Louisville</option>
+                <option>Highlands</option>
+                <option>St. Matthews</option>
+                <option>Jeffersontown</option>
+                <option>Okolona</option>
+                <option>Pleasure Ridge Park</option>
+                <option>Shively</option>
+                <option>Newburg</option>
+                <option>Portland</option>
+                <option>Entire Louisville Metro</option>
+                <optgroup label="Surrounding Areas">
+                  <option>Jefferson County</option>
+                  <option>Oldham County</option>
+                  <option>Shelby County</option>
+                  <option>Bullitt County</option>
+                  <option>Nelson County</option>
+                  <option>Clark County, IN</option>
+                  <option>Floyd County, IN</option>
+                  <option>Harrison County, IN</option>
+                  <option>Washington County, IN</option>
+                </optgroup>
+                <optgroup label="Specific Locations">
+                  <option>Louisville International Airport (SDF)</option>
+                  <option>UofL Belknap Campus</option>
+                  <option>UofL Health Sciences Campus</option>
+                  <option>Churchill Downs</option>
+                  <option>Kentucky Exposition Center</option>
+                  <option>Waterfront Park</option>
+                  <option>Ohio River Bridges</option>
+                </optgroup>
+              </select>
+              <input type="text" id="emergency-address" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Street address (optional)">
+            </div>
+          </div>
+
+          <div class="mb-6">
+            <label for="emergency-description" class="block text-gray-700 font-medium mb-2">Emergency Description <span class="text-red-600">*</span></label>
+            <textarea id="emergency-description" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" rows="4" placeholder="Please describe the emergency in detail..." required aria-required="true"></textarea>
+            <p class="text-xs text-gray-500 mt-1">Include important details like injuries, damages, or immediate dangers</p>
+          </div>
+
+          <div class="mb-6">
+            <label for="file-input" class="block text-gray-700 font-medium mb-2">Upload Photo/Video (Optional)</label>
+            <div id="drag-area" class="drag-area p-8 text-center cursor-pointer" role="button" tabindex="0" aria-label="Drag and drop area for file upload">
+              <div class="flex flex-col items-center">
+                <i class="fa-solid fa-cloud-arrow-up text-4xl text-gray-400 mb-2" aria-hidden="true"></i>
+                <p class="text-gray-600">Drag & drop your file here or click to browse</p>
+                <p class="text-xs text-gray-500 mt-1">Max file size: 100MB (JPG, PNG, PDF, MP4)</p>
+              </div>
+              <input type="file" id="file-input" class="hidden" accept=".jpg,.jpeg,.png,.pdf,.mp4">
+            </div>
+            <div id="file-info" class="hidden mt-2 p-2 bg-gray-100 rounded-lg"></div>
+          </div>
+
+          <div class="mb-6">
+            <label class="block text-gray-700 font-medium mb-2">Security Verification <span class="text-red-600">*</span></label>
+            <p class="text-sm text-gray-600 mb-2">Drag the tornado icon into the storm cloud to verify you're human</p>
+            <div class="captcha-container relative">
+              <div class="captcha-cloud" aria-hidden="true"></div>
+              <div class="captcha-tornado" draggable="true" role="button" aria-label="Drag me to the cloud"><i class="fa-solid fa-wind" aria-hidden="true"></i></div>
+              <div class="captcha-target" aria-hidden="true"><i class="fa-solid fa-cloud" aria-hidden="true"></i></div>
+            </div>
+            <p id="captcha-error" class="text-red-500 text-sm mt-1 hidden">Please complete the security verification</p>
+          </div>
+
+          <div class="flex justify-end">
+            <button type="button" id="cancel-report" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-lg mr-4 transition duration-300">Cancel</button>
+            <button type="submit" id="submit-report" class="emergency-btn text-white font-bold py-2 px-6 rounded-lg transition duration-300">Submit Emergency Report</button>
+          </div>
+        </form>
       </div>
     </section>
 
-    <!-- Your Reports -->
-    <section id="reports" class="hidden space-y-4">
-      <div class="flex items-center justify-between">
-        <h4 class="text-lg font-extrabold">Your Reports</h4>
-        <div class="flex items-center gap-2">
-          <select id="filter" class="px-2 py-1 rounded-md bg-white/10 border border-white/15">
-            <option value="all">All</option>
-            <option value="pending">Pending</option>
-            <option value="resolved">Resolved</option>
-          </select>
-          <button id="refresh-reports" class="px-3 py-2 rounded-md border border-white/15 hover:bg-white/10"><i class="fa-solid fa-rotate"></i></button>
-        </div>
+    <!-- Thank You -->
+    <section aria-labelledby="thank-you-heading">
+      <div id="thank-you-message" class="hidden bg-white rounded-lg shadow-md overflow-hidden p-8 text-center mb-8">
+        <i class="fa-solid fa-circle-check text-5xl text-green-500 mb-4" aria-hidden="true"></i>
+        <h2 id="thank-you-heading" class="text-2xl font-bold text-gray-800 mb-2">EMERGENCY REPORT RECEIVED</h2>
+        <p class="text-gray-600 mb-4">Your report has been submitted to Louisville Metro Emergency Services.</p>
+        <p class="text-gray-600 mb-6 font-medium">Response teams have been alerted and will respond as soon as possible.</p>
+        <button id="back-to-dashboard" class="emergency-btn text-white font-bold py-2 px-6 rounded-lg transition duration-300">
+          <i class="fa-solid fa-arrow-left mr-2" aria-hidden="true"></i> Return to Dashboard
+        </button>
       </div>
-      <div class="card overflow-hidden">
+    </section>
+
+    <!-- View Reports -->
+    <section aria-labelledby="view-reports-heading">
+      <div id="view-reports-section" class="hidden bg-white rounded-lg shadow-md overflow-hidden">
+        <div class="bg-blue-800 text-white px-6 py-4 flex justify-between items-center">
+          <h2 id="view-reports-heading" class="text-xl font-bold"><i class="fa-solid fa-clipboard-list mr-2" aria-hidden="true"></i> YOUR EMERGENCY REPORTS</h2>
+          <div class="flex items-center space-x-4">
+            <div class="relative">
+              <label for="report-filter" class="sr-only">Filter reports</label>
+              <select id="report-filter" class="appearance-none bg-blue-700 text-white px-3 py-1 pr-8 rounded-md text-sm focus:outline-none">
+                <option value="all">All Reports</option>
+                <option value="pending">Pending Only</option>
+                <option value="resolved">Resolved Only</option>
+              </select>
+              <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-white">
+                <i class="fa-solid fa-chevron-down text-xs" aria-hidden="true"></i>
+              </div>
+            </div>
+            <button id="refresh-reports" class="text-white hover:text-blue-200 transition-colors" aria-label="Refresh reports">
+              <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
+            </button>
+          </div>
+        </div>
+
         <div class="overflow-x-auto">
-          <table class="min-w-full">
-            <thead class="bg-white/5">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
               <tr>
-                <th class="text-left px-4 py-3 text-xs">Type</th>
-                <th class="text-left px-4 py-3 text-xs">Severity</th>
-                <th class="text-left px-4 py-3 text-xs">Location</th>
-                <th class="text-left px-4 py-3 text-xs">Reported</th>
-                <th class="text-left px-4 py-3 text-xs">Status</th>
-                <th class="text-left px-4 py-3 text-xs">Response</th>
-                <th class="text-left px-4 py-3 text-xs">Actions</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Emergency Type</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Severity</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time Reported</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Response</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody id="tbl" class="divide-y divide-white/10"></tbody>
+            <tbody id="emergency-reports-table" class="bg-white divide-y divide-gray-200">
+              <tr id="no-reports-message" class="hidden">
+                <td colspan="7" class="px-6 py-4 text-center text-gray-500">You haven't submitted any emergency reports yet.</td>
+              </tr>
+            </tbody>
           </table>
         </div>
-        <div class="flex items-center justify-between p-3 bg-white/5 border-t border-white/10">
-          <div id="rcount" class="text-xs opacity-80">—</div>
-          <div class="flex items-center gap-1" id="pager"></div>
+
+        <div class="bg-gray-50 px-6 py-4 flex items-center justify-between border-t border-gray-200">
+          <div class="flex-1 flex justify-between sm:hidden">
+            <button id="prev-page" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">Previous</button>
+            <button id="next-page" class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">Next</button>
+          </div>
+          <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+            <div>
+              <p id="report-count" class="text-sm text-gray-700">Showing <span class="font-medium">1</span> to <span class="font-medium">5</span> of <span class="font-medium">0</span> results</p>
+            </div>
+            <div>
+              <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                <button id="first-page" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                  <span class="sr-only">First</span>
+                  <i class="fa-solid fa-angles-left" aria-hidden="true"></i>
+                </button>
+                <button id="prev-page-lg" class="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                  <span class="sr-only">Previous</span>
+                  <i class="fa-solid fa-angle-left" aria-hidden="true"></i>
+                </button>
+                <div id="page-numbers" class="flex"></div>
+                <button id="next-page-lg" class="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                  <span class="sr-only">Next</span>
+                  <i class="fa-solid fa-angle-right" aria-hidden="true"></i>
+                </button>
+                <button id="last-page" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                  <span class="sr-only">Last</span>
+                  <i class="fa-solid fa-angles-right" aria-hidden="true"></i>
+                </button>
+              </nav>
+            </div>
+          </div>
         </div>
       </div>
     </section>
   </main>
 
-  <!-- Toast -->
-  <div id="toast" class="toast" role="status" aria-live="polite"><i class="fa-solid fa-circle-info"></i><span id="toast-txt">Ready</span></div>
+  <!-- Emergency Modal -->
+  <div id="emergency-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" aria-modal="true" role="dialog">
+    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+        <h3 class="text-xl font-bold text-gray-800" id="modal-title">Emergency Details</h3>
+        <button id="close-modal" class="text-gray-500 hover:text-gray-700" aria-label="Close modal">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div class="p-6" id="modal-content"></div>
+      <div class="px-6 py-4 border-t border-gray-200 flex justify-end">
+        <button id="modal-close-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition duration-300">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
 
-  <script>
-  // ====== Model & Storage ======
+<script>
+/* -------- Utility: screen-reader-only style (added once) -------- */
+document.addEventListener('DOMContentLoaded', function() {
+  const style = document.createElement('style');
+  style.textContent = `
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border-width:0; }
+  `;
+  document.head.appendChild(style);
+});
+
+/* -------- Main App -------- */
+document.addEventListener('DOMContentLoaded', function() {
+  // Simulated current user (replace with real auth data)
+  const currentUser = { name: "John Doe", phone: "502-555-1234" };
+
+  // Known/legacy keys we might migrate from
   const STORAGE_KEY = 'louisvilleIncidents';
-  const currentUser = { name:'John Doe', phone:'502-555-1234' };
+  const LEGACY_KEYS = ['incidents', 'louisvilleReceiverReports', 'louisvilleUserReports'];
 
-  function read(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]'); }catch{ return []; } }
-  function write(v){ localStorage.setItem(STORAGE_KEY, JSON.stringify(v||[])); }
+  // Elements
+  const reportEmergencyBtn = document.getElementById('report-emergency-btn');
+  const viewReportsBtn = document.getElementById('view-reports-btn');
+  const reportEmergencyForm = document.getElementById('report-emergency-form');
+  const viewReportsSection = document.getElementById('view-reports-section');
+  const thankYouMessage = document.getElementById('thank-you-message');
+  const backToDashboard = document.getElementById('back-to-dashboard');
+  const cancelReport = document.getElementById('cancel-report');
+  const logoutBtn = document.getElementById('logout-btn');
+  const refreshMapBtn = document.getElementById('refresh-map');
+  const emergencyAlert = document.getElementById('emergency-alert');
+  const dismissAlertBtn = document.getElementById('dismiss-alert');
+  const resetStorageBtn = document.getElementById('reset-storage-btn');
 
-  // ====== Time & Weather (whimsical) ======
-  function tick(){ const n=new Date(); document.getElementById('date-txt').textContent=n.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'}); document.getElementById('time-txt').textContent=n.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}); }
-  function weather(){ const opts=[{i:'fa-sun',t:'Sunny 72°F'},{i:'fa-cloud',t:'Cloudy 68°F'},{i:'fa-cloud-rain',t:'Rain 65°F'},{i:'fa-bolt',t:'Stormy 70°F'}]; const w=opts[Math.floor(Math.random()*opts.length)]; const ico=document.getElementById('wx-ico'); ico.className='fa-solid '+w.i; document.getElementById('wx-txt').textContent=w.t; }
-
-  // ====== Map ======
-  let map; let markerLayer;
-  const NEIGHBORHOOD = {
-    "Downtown Louisville": [38.256,-85.756], "East End": [38.280,-85.570], "South End":[38.130,-85.770], "West End":[38.260,-85.820],
-    "Old Louisville":[38.227,-85.758], "Highlands":[38.236,-85.708], "St. Matthews":[38.252,-85.651], "Jeffersontown":[38.194,-85.564],
-    "Okolona":[38.141,-85.687], "Pleasure Ridge Park":[38.145,-85.848], "Shively":[38.200,-85.819], "Newburg":[38.172,-85.683],
-    "Portland":[38.269,-85.789], "Entire Louisville Metro":[38.2527,-85.7585],
-    "Jefferson County":[38.2527,-85.7585], "Oldham County":[38.397,-85.448], "Shelby County":[38.210,-85.189], "Bullitt County":[37.996,-85.684],
-    "Nelson County":[37.773,-85.467], "Clark County, IN":[38.337,-85.735], "Floyd County, IN":[38.285,-85.824], "Harrison County, IN":[38.212,-86.121],
-    "Washington County, IN":[38.606,-86.101],
-    "Louisville International Airport (SDF)": [38.174,-85.736], "UofL Belknap Campus":[38.215,-85.760], "UofL Health Sciences Campus":[38.249,-85.749],
-    "Churchill Downs":[38.202,-85.771], "Kentucky Exposition Center":[38.198,-85.739], "Waterfront Park":[38.260,-85.743], "Ohio River Bridges":[38.258,-85.741]
-  };
-
-  function seededOffset(seed, axis){
-    const str=String(seed)+':'+axis; let h=5381; for(let i=0;i<str.length;i++){ h=((h<<5)+h) ^ str.charCodeAt(i); }
-    const u=(h>>>0)/4294967295; // 0..1
-    return (u*0.008)-0.004; // +/- ~0.004 deg (~400m)
-  }
-  function incidentLatLng(incident){
-    if (Number.isFinite(incident.lat) && Number.isFinite(incident.lng)) return [incident.lat, incident.lng];
-    const base = NEIGHBORHOOD[incident.address] || NEIGHBORHOOD[incident.neighborhood] || [38.2527,-85.7585];
-    return [ base[0]+seededOffset(incident.id,'x'), base[1]+seededOffset(incident.id,'y') ];
+  // Map
+  let emergencyMap = null;
+  if (window.L && document.getElementById('emergency-map')) {
+    emergencyMap = L.map('emergency-map', { zoomControl: true }).setView([38.2527, -85.7585], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
+    }).addTo(emergencyMap);
+    emergencyMap.zoomControl.setPosition('topright');
+    updateEmergencyMap();
   }
 
-  function colorFor(type){
-    const m={'Tornado':'#8B0000','Severe Thunderstorm':'#4B0082','Flash Flood Warning':'#006994','Hailstorm':'#4682B4','Winter Storm':'#B0E0E6','Major Traffic Accident':'#FF8C00','Gas Leak':'#DAA520','Chemical Spill':'#556B2F','Building Collapse':'#8B4513','Medical Emergency':'#006400','Mass Casualty Incident':'#800000','Power Outage':'#696969','Water Main Break':'#1E90FF','Other Emergency':'#6A5ACD'};
-    return m[type] || '#6A5ACD';
+  // Modal
+  const emergencyModal = document.getElementById('emergency-modal');
+  const closeModalBtn = document.getElementById('close-modal');
+  const modalCloseBtn = document.getElementById('modal-close-btn');
+
+  // Listeners
+  reportEmergencyBtn.addEventListener('click', showReportForm);
+  viewReportsBtn.addEventListener('click', showViewReports);
+  backToDashboard?.addEventListener('click', showMainView);
+  cancelReport?.addEventListener('click', showMainView);
+  logoutBtn.addEventListener('click', logout);
+  refreshMapBtn.addEventListener('click', updateEmergencyMap);
+  dismissAlertBtn.addEventListener('click', () => emergencyAlert.classList.add('hidden'));
+  closeModalBtn.addEventListener('click', closeModal);
+  modalCloseBtn.addEventListener('click', closeModal);
+  resetStorageBtn.addEventListener('click', handleResetStorage);
+
+  // Init: migrate any legacy storage to our single key
+  migrateStorage();
+  // Draw initial UI
+  initializeEmergencyForm();
+  initializeReportsTableControls();
+  updateEmergencyReportsTable();
+  updateStats();
+  checkForEmergencies();
+
+  // Date/time/weather
+  updateDateTime();
+  setInterval(updateDateTime, 60_000);
+  updateWeather();
+
+  /* ---------- View toggles ---------- */
+  function showReportForm() {
+    reportEmergencyForm.classList.remove('hidden');
+    viewReportsSection.classList.add('hidden');
+    thankYouMessage.classList.add('hidden');
+    document.getElementById('reporter-name').focus();
+
+    // Prefill user
+    document.getElementById('reporter-name').value = currentUser.name;
+    document.getElementById('reporter-phone').value = currentUser.phone;
   }
-  function abbr(type){ const w=String(type).trim().split(/\s+/); return w.length===1? w[0].slice(0,2).toUpperCase(): w.map(s=>s[0]).join('').toUpperCase(); }
 
-  function renderMap(){
-    if(!map){ map=L.map('map',{zoomControl:true}).setView([38.2527,-85.7585],12); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(map); markerLayer=L.layerGroup().addTo(map); map.zoomControl.setPosition('topright'); }
-    markerLayer.clearLayers();
+  function showViewReports() {
+    reportEmergencyForm.classList.add('hidden');
+    viewReportsSection.classList.remove('hidden');
+    thankYouMessage.classList.add('hidden');
+    updateEmergencyReportsTable();
+    document.getElementById('report-filter').focus();
+  }
 
-    const list = read().filter(i=>!i.resolved);
-    document.getElementById('stat-active').textContent = list.length;
+  function showMainView() {
+    reportEmergencyForm.classList.add('hidden');
+    viewReportsSection.classList.add('hidden');
+    thankYouMessage.classList.add('hidden');
+    reportEmergencyBtn.focus();
+  }
 
-    list.forEach(it=>{
-      const [lat,lng]=incidentLatLng(it); const color=colorFor(it.type);
-      const icon=L.divIcon({className:'', html:`<div style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;background:${color};box-shadow:0 6px 16px rgba(0,0,0,.35)">${abbr(it.type)}</div>`});
-      const m=L.marker([lat,lng],{icon, alt:`${it.type} at ${it.address}`}).addTo(markerLayer);
-      // sonar ring
-      const ring=L.circle([lat,lng],{radius:150, color:color, weight:1, fillColor:color, fillOpacity:.08}).addTo(markerLayer);
-      setInterval(()=>{ let o=0.2; let r=80; const si=setInterval(()=>{ r+=12; o-=.02; ring.setStyle({fillOpacity:Math.max(0,o)}); ring.setRadius(r); if(o<=0){ clearInterval(si); ring.setRadius(150); ring.setStyle({fillOpacity:.08}); } }, 30); }, 1600);
+  function showThankYouMessage() {
+    reportEmergencyForm.classList.add('hidden');
+    viewReportsSection.classList.add('hidden');
+    thankYouMessage.classList.remove('hidden');
+    backToDashboard.focus();
+  }
 
-      const pop=`<div class="popup-h" style="background:${color}">${(it.type||'').toUpperCase()}</div>
-                 <div class="popup-b"><p><strong>Location:</strong> ${it.address}</p>
-                 <p><strong>Severity:</strong> ${it.severity}/10</p>
-                 <p><strong>Reported:</strong> ${fmt(it.timestamp)}</p>
-                 ${it.description? `<p class="mt-2"><strong>Details:</strong> ${it.description.slice(0,120)}${it.description.length>120?'…':''}</p>`:''}</div>`;
-      m.bindPopup(pop);
+  function logout(e) {
+    e.preventDefault();
+    showNotification('You have been logged out', 'success');
+    setTimeout(() => { window.location.href = '/'; }, 1200);
+  }
+
+  /* ---------- Date / Weather ---------- */
+  function updateDateTime() {
+    const now = new Date();
+    document.getElementById('date-display').textContent =
+      now.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+    document.getElementById('time-display').textContent =
+      now.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
+  }
+
+  function updateWeather() {
+    const weather = [
+      { icon: 'fa-sun', temp: '72°F', label: 'Sunny' },
+      { icon: 'fa-cloud', temp: '68°F', label: 'Cloudy' },
+      { icon: 'fa-cloud-rain', temp: '65°F', label: 'Rainy' },
+      { icon: 'fa-bolt', temp: '70°F', label: 'Thunderstorms' }
+    ][Math.floor(Math.random()*4)];
+    const iconEl = document.getElementById('weather-icon');
+    iconEl.className = `fa-solid ${weather.icon} mr-1`;
+    document.getElementById('weather-temp').textContent = `${weather.temp} | ${weather.label}`;
+  }
+
+  /* ---------- Alerts ---------- */
+  function checkForEmergencies() {
+    const incidents = readIncidents();
+    const severe = incidents.filter(i => !i.resolved && Number(i.severity) >= 7);
+    if (severe.length) {
+      const most = severe.reduce((a,b)=> (+a.severity > +b.severity ? a : b));
+      document.getElementById('alert-title').textContent = `SEVERE ${String(most.type || '').toUpperCase()} ALERT`;
+      document.getElementById('alert-message').textContent =
+        `Active ${most.type} reported in ${most.address}. Severity level: ${most.severity}/10.`;
+      emergencyAlert.classList.remove('hidden');
+
+      const live = document.createElement('div');
+      live.setAttribute('aria-live','assertive');
+      live.setAttribute('role','alert');
+      live.className='sr-only';
+      live.textContent = `Emergency alert: ${most.type} reported in ${most.address}. Severity ${most.severity} out of 10.`;
+      document.body.appendChild(live);
+      setTimeout(()=> live.remove(), 4000);
+    }
+  }
+
+  /* ---------- Storage & migration ---------- */
+  function readIncidents(){
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  }
+  function writeIncidents(list){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(list || []));
+  }
+  function digitsOnly(s){ return String(s||'').replace(/\D/g,''); }
+
+  function migrateStorage(){
+    // 1) Merge any legacy arrays into single STORAGE_KEY
+    let base = readIncidents();
+
+    LEGACY_KEYS.forEach(key => {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return;
+        const arr = JSON.parse(raw);
+        if (!Array.isArray(arr)) return;
+
+        const mapped = arr.map(x => {
+          // Try to normalize various shapes to our current one
+          const id = Number.isFinite(x.id) ? x.id : Date.now() + Math.floor(Math.random()*1000);
+          const type = x.type || x.emergencyType || x.category || 'Other Emergency';
+          const severity = Math.max(1, Math.min(10, Number(x.severity || x.level || 5)));
+          const address = x.address || x.neighborhood || 'Downtown Louisville';
+          const timestamp = x.timestamp || x.time || new Date().toISOString();
+          const name = x.name || x.reporterName || 'Unknown';
+          const phone = x.phone || x.reporterPhone || '';
+          const reporterName = x.reporterName || name; // fallback
+          const adminReply = typeof x.adminReply === 'string' ? x.adminReply : null;
+          const resolved = Boolean(x.resolved);
+          const resolvedTimestamp = x.resolvedTimestamp || (resolved ? timestamp : null);
+          const description = x.description || x.details || '';
+          return { id, type, severity, address, timestamp, name, phone, reporterName, adminReply, resolved, resolvedTimestamp, description };
+        });
+
+        base = base.concat(mapped);
+        // Optional: clear legacy after migrating
+        localStorage.removeItem(key);
+      } catch {}
+    });
+
+    // 2) Ensure reporterName exists and normalize bounds
+    base = base.map(i => ({
+      ...i,
+      reporterName: i.reporterName || i.name || currentUser.name,
+      severity: Math.max(1, Math.min(10, Number(i.severity || 5)))
+    }));
+
+    writeIncidents(base);
+  }
+
+  function handleResetStorage(){
+    const ok = confirm('This will clear all saved incidents for this app on this browser. Continue?');
+    if (!ok) return;
+    // Remove our key + legacy keys
+    localStorage.removeItem(STORAGE_KEY);
+    ['resolvedTimestamp','adminNotifs', ...new Set(LEGACY_KEYS)].forEach(k => localStorage.removeItem(k));
+    showNotification('Local storage cleared.', 'warning');
+    updateEmergencyMap();
+    updateEmergencyReportsTable();
+    updateStats();
+  }
+
+  /* ---------- Form ---------- */
+  function initializeEmergencyForm() {
+    if (!document.getElementById('emergency-form')) return;
+
+    const severitySlider = document.getElementById('severity');
+    const severityValue  = document.getElementById('severity-value');
+    const dragArea = document.getElementById('drag-area');
+    const fileInput = document.getElementById('file-input');
+    const fileInfo  = document.getElementById('file-info');
+
+    severitySlider.addEventListener('input', function(){ severityValue.textContent = this.value; });
+
+    // DnD upload
+    ['dragenter','dragover','dragleave','drop'].forEach(ev => dragArea.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); }, false));
+    ['dragenter','dragover'].forEach(ev => dragArea.addEventListener(ev, ()=> dragArea.classList.add('active'), false));
+    ['dragleave','drop'].forEach(ev => dragArea.addEventListener(ev, ()=> dragArea.classList.remove('active'), false));
+    dragArea.addEventListener('drop', e => handleFiles({ target: { files: e.dataTransfer.files }}));
+    dragArea.addEventListener('click', () => fileInput.click());
+    dragArea.addEventListener('keydown', e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); fileInput.click(); }});
+    fileInput.addEventListener('change', handleFiles);
+
+    function handleFiles(e){
+      const files = e.target.files;
+      if (!files || !files.length) return;
+      const file = files[0];
+      const valid = ['image/jpeg','image/png','application/pdf','video/mp4'];
+      const max = 100 * 1024 * 1024;
+      if (!valid.includes(file.type)) { showNotification('Please upload a JPG, PNG, PDF, or MP4 file.', 'error'); return; }
+      if (file.size > max) { showNotification('File size exceeds 100MB limit.', 'error'); return; }
+
+      const icon = file.type.includes('image') ? 'fa-image' : file.type.includes('video') ? 'fa-video' : 'fa-file-pdf';
+      fileInfo.innerHTML = `
+        <div class="flex items-center">
+          <i class="fa-solid ${icon} text-xl mr-3 text-blue-500" aria-hidden="true"></i>
+          <div>
+            <p class="font-medium">${file.name}</p>
+            <p class="text-sm text-gray-600">${(file.size/(1024*1024)).toFixed(2)} MB</p>
+          </div>
+          <button id="remove-file" class="ml-auto text-red-500 hover:text-red-700" aria-label="Remove file">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+          </button>
+        </div>`;
+      fileInfo.classList.remove('hidden');
+      document.getElementById('remove-file').addEventListener('click', () => { fileInput.value=''; fileInfo.classList.add('hidden'); });
+    }
+
+    // Captcha
+    const captchaTornado = document.querySelector('.captcha-tornado');
+    const captchaTarget  = document.querySelector('.captcha-target');
+
+    if (captchaTornado && captchaTarget) {
+      let isDragging = false, offsetX=0, offsetY=0;
+      captchaTornado.style.position='absolute'; captchaTornado.style.left='20px'; captchaTornado.style.top='20px';
+
+      captchaTornado.addEventListener('mousedown', e => {
+        isDragging = true;
+        const rect = captchaTornado.getBoundingClientRect();
+        offsetX = e.clientX - rect.left; offsetY = e.clientY - rect.top;
+        captchaTornado.style.cursor = 'grabbing'; e.preventDefault();
+      });
+
+      document.addEventListener('mousemove', e => {
+        if (!isDragging) return;
+        const cont = document.querySelector('.captcha-container').getBoundingClientRect();
+        const tRect = captchaTornado.getBoundingClientRect();
+        const targetRect = captchaTarget.getBoundingClientRect();
+        let x = e.clientX - offsetX - cont.left;
+        let y = e.clientY - offsetY - cont.top;
+        x = Math.max(0, Math.min(x, cont.width - tRect.width));
+        y = Math.max(0, Math.min(y, cont.height - tRect.height));
+        captchaTornado.style.left = `${x}px`; captchaTornado.style.top = `${y}px`;
+
+        // hit test (center distance)
+        const center = { x: x + tRect.width/2, y: y + tRect.height/2 };
+        const tgt = { x: targetRect.left - cont.left + targetRect.width/2, y: targetRect.top - cont.top + targetRect.height/2 };
+        const dist = Math.hypot(center.x - tgt.x);
+        if (dist < 30) { captchaTornado.style.backgroundColor = '#28a745'; document.getElementById('captcha-error').classList.add('hidden'); }
+        else { captchaTornado.style.backgroundColor = '#6c757d'; }
+      });
+
+      document.addEventListener('mouseup', ()=> { isDragging=false; captchaTornado.style.cursor='grab'; });
+
+      // Keyboard accessible move
+      captchaTornado.addEventListener('keydown', e => {
+        if (!['ArrowRight','ArrowLeft','ArrowUp','ArrowDown'].includes(e.key)) return;
+        e.preventDefault();
+        const step=5;
+        const cont = document.querySelector('.captcha-container').getBoundingClientRect();
+        const tRect = captchaTornado.getBoundingClientRect();
+        let x = parseInt(captchaTornado.style.left)||20;
+        let y = parseInt(captchaTornado.style.top)||20;
+        if (e.key==='ArrowRight') x+=step; if (e.key==='ArrowLeft') x-=step; if (e.key==='ArrowUp') y-=step; if (e.key==='ArrowDown') y+=step;
+        x = Math.max(0, Math.min(x, cont.width - 40)); y = Math.max(0, Math.min(y, cont.height - 40));
+        captchaTornado.style.left = `${x}px`; captchaTornado.style.top = `${y}px`;
+
+        const targetRect = captchaTarget.getBoundingClientRect();
+        const center = { x: x + tRect.width/2, y: y + tRect.height/2 };
+        const tgt = { x: targetRect.left - cont.left + targetRect.width/2, y: targetRect.top - cont.top + targetRect.height/2 };
+        const dist = Math.hypot(center.x - tgt.x);
+        if (dist < 30) { captchaTornado.style.backgroundColor = '#28a745'; document.getElementById('captcha-error').classList.add('hidden'); }
+        else { captchaTornado.style.backgroundColor = '#6c757d'; }
+      });
+    }
+
+    // Submit
+    document.getElementById('emergency-form').addEventListener('submit', function(e){
+      e.preventDefault();
+
+      if (!validateForm()) return;
+
+      const submitBtn = document.getElementById('submit-report');
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2" aria-hidden="true"></i> Submitting...';
+
+      setTimeout(() => {
+        const data = {
+          name: document.getElementById('reporter-name').value,
+          phone: document.getElementById('country-code').value + document.getElementById('reporter-phone').value,
+          type: document.getElementById('emergency-type').value,
+          severity: Number(document.getElementById('severity').value),
+          neighborhood: document.getElementById('emergency-neighborhood').value,
+          address: document.getElementById('emergency-address').value || document.getElementById('emergency-neighborhood').value,
+          description: document.getElementById('emergency-description').value,
+          timestamp: new Date().toISOString()
+        };
+
+        saveEmergency(data);
+        this.reset();
+        document.getElementById('file-info').classList.add('hidden');
+
+        const t = document.querySelector('.captcha-tornado');
+        if (t){ t.style.backgroundColor = '#6c757d'; t.style.left='20px'; t.style.top='20px'; }
+        showThankYouMessage();
+
+        updateEmergencyMap();
+        updateEmergencyReportsTable();
+        updateStats();
+        checkForEmergencies();
+
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Emergency Report';
+      }, 1000);
+
+      function validateForm(){
+        let ok = true;
+        const req = ['reporter-name','reporter-phone','emergency-type','emergency-neighborhood','emergency-description'];
+        req.forEach(id => {
+          const el = document.getElementById(id);
+          if (!el.value || !String(el.value).trim()){ el.classList.add('border-red-500'); ok=false; }
+          else el.classList.remove('border-red-500');
+        });
+
+        // captcha verified if turned green by logic above
+        const verified = document.querySelector('.captcha-tornado')?.style.backgroundColor === 'rgb(40, 167, 69)';
+        if (!verified) { document.getElementById('captcha-error').classList.remove('hidden'); ok=false; }
+        else document.getElementById('captcha-error').classList.add('hidden');
+
+        if (!ok) showNotification('Please fill all required fields and complete the security verification.', 'error');
+        return ok;
+      }
+    });
+
+    function saveEmergency(em){
+      const incidents = readIncidents();
+      const newItem = {
+        id: Date.now(),
+        ...em,
+        reporterName: currentUser.name,
+        resolved: false,
+        adminReply: null
+      };
+      incidents.push(newItem);
+      writeIncidents(incidents);
+    }
+  } // end initializeEmergencyForm
+
+  /* ---------- Map ---------- */
+  function updateEmergencyMap(){
+    if (!emergencyMap) return;
+    // remove markers only (keep tile layer)
+    emergencyMap.eachLayer(layer => { if (layer instanceof L.Marker) emergencyMap.removeLayer(layer); });
+
+    const incidents = readIncidents();
+    document.getElementById('active-incidents').textContent = incidents.filter(i => !i.resolved).length;
+
+    incidents.filter(i => !i.resolved).forEach(incident => {
+      const neighborhoodCoords = {
+        // Louisville Metro neighborhoods
+        "Downtown Louisville": [38.256, -85.756],
+        "East End": [38.280, -85.570],
+        "South End": [38.130, -85.770],
+        "West End": [38.260, -85.820],
+        "Old Louisville": [38.227, -85.758],
+        "Highlands": [38.236, -85.708],
+        "St. Matthews": [38.252, -85.651],
+        "Jeffersontown": [38.194, -85.564],
+        "Okolona": [38.141, -85.687],
+        "Pleasure Ridge Park": [38.145, -85.848],
+        "Shively": [38.200, -85.819],
+        "Newburg": [38.172, -85.683],
+        "Portland": [38.269, -85.789],
+        "Entire Louisville Metro": [38.2527, -85.7585],
+
+        // Surrounding areas (county seats / centroids)
+        "Jefferson County": [38.2527, -85.7585],
+        "Oldham County": [38.397, -85.448],
+        "Shelby County": [38.210, -85.189],
+        "Bullitt County": [37.996, -85.684],
+        "Nelson County": [37.773, -85.467],
+        "Clark County, IN": [38.337, -85.735],
+        "Floyd County, IN": [38.285, -85.824],
+        "Harrison County, IN": [38.212, -86.121],
+        "Washington County, IN": [38.606, -86.101],
+
+        // Point locations
+        "Louisville International Airport (SDF)": [38.174, -85.736],
+        "UofL Belknap Campus": [38.215, -85.760],
+        "UofL Health Sciences Campus": [38.249, -85.749],
+        "Churchill Downs": [38.202, -85.771],
+        "Kentucky Exposition Center": [38.198, -85.739],
+        "Waterfront Park": [38.260, -85.743],
+        "Ohio River Bridges": [38.258, -85.741],
+      };
+
+      const base = neighborhoodCoords[incident.address] || neighborhoodCoords[incident.neighborhood] || [38.2527,-85.7585];
+      const lat = base[0] + (Math.random()*0.01 - 0.005);
+      const lng = base[1] + (Math.random()*0.01 - 0.005);
+
+      const color = getMarkerColor(incident.type);
+      const icon = L.divIcon({
+        className: 'custom-icon',
+        html: `<div style="background:${color};width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;">${getEmergencyAbbreviation(incident.type)}</div>`,
+        iconSize: [30,30], iconAnchor:[15,15]
+      });
+
+      const marker = L.marker([lat,lng], { icon, alt: `${incident.type} at ${incident.address}` }).addTo(emergencyMap);
+
+      const popup = `
+        <div class="custom-popup">
+          <div class="popup-header" style="background:${color}"><h3 class="font-bold text-white">${String(incident.type || '').toUpperCase()}</h3></div>
+          <div class="popup-body">
+            <p><strong>Location:</strong> ${incident.address}</p>
+            <p><strong>Severity:</strong> ${incident.severity}/10</p>
+            <p><strong>Reported:</strong> ${formatDateTime(incident.timestamp)}</p>
+            ${incident.description ? `<p class="mt-2"><strong>Details:</strong> ${incident.description.substring(0,100)}${incident.description.length>100?'...':''}</p>`:''}
+          </div>
+        </div>`;
+      marker.bindPopup(popup);
     });
   }
 
-  // ====== Reports Table ======
-  let curFilter='all', page=1; const per=5;
-  function digits(s){return String(s||'').replace(/\D/g,'');}
-  function mine(all){ const me=digits(currentUser.phone).slice(-10); return all.filter(i=> (i.name===currentUser.name) || digits(i.phone).endsWith(me)); }
-  function rows(){ let arr=mine(read()); if(curFilter==='pending') arr=arr.filter(i=>!i.resolved); if(curFilter==='resolved') arr=arr.filter(i=>i.resolved); return arr.sort((a,b)=> new Date(b.timestamp)-new Date(a.timestamp)); }
-  function renderReports(){ const body=document.getElementById('tbl'); const pag=document.getElementById('pager'); const rc=document.getElementById('rcount'); body.innerHTML=''; pag.innerHTML=''; const data=rows(); if(!data.length){ rc.textContent='No reports'; return; } const total=data.length; const pages=Math.max(1, Math.ceil(total/per)); page=Math.min(page,pages); const slice=data.slice((page-1)*per, (page-1)*per+per); rc.textContent=`Showing ${(page-1)*per+1}–${Math.min(page*per,total)} of ${total}`; slice.forEach(it=>{ const tr=document.createElement('tr'); const sevClass=it.severity<=3?'bg-green-500':'bg-yellow-400'; const sevClass2=it.severity>=7?'bg-red-500':sevClass; tr.innerHTML=`<td class="px-4 py-3 text-sm">${it.type}</td>
-      <td class="px-4 py-3 text-sm"><span class="inline-block w-24 h-2 rounded ${sevClass2}"></span> <span class="ml-2">${it.severity}/10</span></td>
-      <td class="px-4 py-3 text-sm">${it.address}</td>
-      <td class="px-4 py-3 text-sm">${fmt(it.timestamp)}</td>
-      <td class="px-4 py-3 text-sm"><span class="px-2 py-1 text-xs rounded ${it.resolved?'bg-green-600':'bg-amber-500'}">${it.resolved?'Resolved':'Pending'}</span></td>
-      <td class="px-4 py-3 text-sm">${it.adminReply? `<span class='opacity-80'>${it.adminReply.slice(0,28)}${it.adminReply.length>28?'…':''}</span>`:'—'}</td>
-      <td class="px-4 py-3 text-sm"><button class="px-2 py-1 rounded border border-white/15 hover:bg-white/10" data-view="${it.id}">View</button></td>`; body.appendChild(tr); });
-      // pager
-      for(let i=1;i<=pages;i++){ const b=document.createElement('button'); b.textContent=i; b.className=`px-2 py-1 rounded ${i===page?'bg-white/15':'border border-white/10 hover:bg-white/10'}`; b.addEventListener('click',()=>{page=i; renderReports();}); pag.appendChild(b);} }
+  /* ---------- Reports (filter + pagination) ---------- */
+  let currentFilter = 'all';
+  let currentPage = 1;
 
-  // ====== Helpers ======
-  function fmt(ts){ const d=new Date(ts); return d.toLocaleDateString()+" "+d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
-  function toast(msg,icon='fa-circle-info'){ const t=document.getElementById('toast'); document.getElementById('toast-txt').textContent=msg; t.querySelector('i').className='fa-solid '+icon; t.classList.add('show'); setTimeout(()=> t.classList.remove('show'), 2200); }
+  function initializeReportsTableControls(){
+    const container = document.getElementById('view-reports-section');
+    if (!container) return;
 
-  // ====== App Wiring ======
-  document.getElementById('btn-report').addEventListener('click',()=>{ document.getElementById('sheet').classList.remove('hidden'); document.getElementById('reports').classList.add('hidden'); document.getElementById('name').focus(); });
-  document.getElementById('btn-view').addEventListener('click',()=>{ document.getElementById('reports').classList.remove('hidden'); document.getElementById('sheet').classList.add('hidden'); renderReports(); });
-  document.getElementById('sheet-cancel').addEventListener('click',()=> document.getElementById('sheet').classList.add('hidden'));
-  document.getElementById('sheet-save').addEventListener('click',()=>{
-    const name=document.getElementById('name').value.trim();
-    const phone=document.getElementById('phone').value.trim();
-    const type=document.getElementById('etype').value;
-    const severity=Number(document.getElementById('sev').value);
-    const neighborhood=document.getElementById('place').value.trim();
-    const address=document.getElementById('addr').value.trim() || neighborhood;
-    const description=document.getElementById('desc').value.trim();
-    if(!name||!phone||!type||!neighborhood||!description){ toast('Please complete all required fields','fa-circle-exclamation'); return; }
-    const item={ id:Date.now(), name, phone, type, severity, neighborhood, address, description, timestamp:new Date().toISOString(), resolved:false };
-    const list=read(); list.push(item); write(list);
-    document.getElementById('sheet').classList.add('hidden');
-    renderMap(); renderReports(); stats(); toast('Report submitted','fa-circle-check'); confetti();
-  });
+    // Filter change
+    container.addEventListener('change', (e)=>{
+      if (e.target && e.target.id === 'report-filter') {
+        currentFilter = e.target.value || 'all';
+        currentPage = 1;
+        updateEmergencyReportsTable(currentFilter, currentPage);
+      }
+    });
 
-  // Keybinds
-  window.addEventListener('keydown', (e)=>{ if(e.key==='r' || e.key==='R') document.getElementById('btn-report').click(); if(e.key==='v'||e.key==='V') document.getElementById('btn-view').click(); if(e.key==='m'||e.key==='M') document.getElementById('btn-ping').click(); });
+    // Clicks (refresh & pagination)
+    container.addEventListener('click', (e)=>{
+      const id = e.target.closest('button')?.id;
+      if (!id) return;
 
-  // Filter & refresh
-  document.getElementById('filter').addEventListener('change',(e)=>{ curFilter=e.target.value; page=1; renderReports(); });
-  document.getElementById('refresh-reports').addEventListener('click',()=>{ renderReports(); toast('Reports refreshed') });
+      const incidents = readIncidents();
+      const total = getFilteredUserIncidents(incidents, currentFilter).length;
+      const totalPages = Math.max(1, Math.ceil(total / 5));
 
-  // Map buttons
-  document.getElementById('btn-refresh-map').addEventListener('click',()=>{ renderMap(); toast('Map refreshed') });
-  document.getElementById('btn-ping').addEventListener('click',()=>{ const l=read().filter(i=>!i.resolved); if(!l.length) return; const [lat,lng]=incidentLatLng(l[0]); map.setView([lat,lng],13,{animate:true}); toast('Focused first active incident','fa-bullseye'); });
+      if (id === 'refresh-reports') {
+        updateEmergencyReportsTable(currentFilter, currentPage);
+        showNotification('Reports refreshed', 'success');
+      }
+      if (id === 'first-page') { currentPage = 1; updateEmergencyReportsTable(currentFilter, currentPage); }
+      if (id === 'prev-page' || id === 'prev-page-lg') { currentPage = Math.max(1, currentPage - 1); updateEmergencyReportsTable(currentFilter, currentPage); }
+      if (id === 'next-page' || id === 'next-page-lg') { currentPage = Math.min(totalPages, currentPage + 1); updateEmergencyReportsTable(currentFilter, currentPage); }
+      if (id === 'last-page') { currentPage = totalPages; updateEmergencyReportsTable(currentFilter, currentPage); }
+    });
+  }
 
-  // Reset
-  document.getElementById('reset').addEventListener('click',()=>{ localStorage.removeItem(STORAGE_KEY); renderMap(); renderReports(); stats(); toast('Local storage cleared','fa-triangle-exclamation'); });
+  function getFilteredUserIncidents(all, filter){
+    const meDigits = digitsOnly("502-555-1234"); // same as currentUser.phone
+    let list = all.filter(i => {
+      const sameName = (i.reporterName || i.name) === "John Doe";
+      const samePhone = digitsOnly(i.phone).endsWith(meDigits.slice(-10)); // match last 10 digits
+      return sameName || samePhone;
+    });
+    if (filter === 'pending') list = list.filter(i => !i.resolved);
+    if (filter === 'resolved') list = list.filter(i => i.resolved);
+    return list.sort((a,b)=> new Date(b.timestamp) - new Date(a.timestamp));
+  }
 
-  // Stats
-  function stats(){ const arr=read(); const today=new Date().toISOString().split('T')[0]; const resolvedToday=arr.filter(i=>i.resolved && i.resolvedTimestamp && i.resolvedTimestamp.split('T')[0]===today).length; document.getElementById('stat-resolved').textContent=resolvedToday; document.getElementById('stat-responders').textContent=Math.max(0, Math.min(99, arr.filter(i=>!i.resolved).length*3 + 5)); }
+  function updateEmergencyReportsTable(filter = currentFilter, page = currentPage){
+    currentFilter = filter; currentPage = page;
+    const tableBody = document.getElementById('emergency-reports-table');
+    const noMsg = document.getElementById('no-reports-message');
+    const reportCount = document.getElementById('report-count');
+    const pageNumbers = document.getElementById('page-numbers');
 
-  // Confetti (tiny vanilla)
-  function confetti(){ const n=40; for(let i=0;i<n;i++){ const s=document.createElement('span'); s.textContent='✦'; s.style.position='fixed'; s.style.zIndex=9999; s.style.left=(Math.random()*100)+'vw'; s.style.top='-10px'; s.style.fontSize=(Math.random()*12+10)+'px'; s.style.transition='transform 1.8s ease, opacity 1.8s ease'; document.body.appendChild(s); requestAnimationFrame(()=>{ s.style.transform=`translateY(${Math.random()*80+60}vh) rotate(${Math.random()*360}deg)`; s.style.opacity='0'; }); setTimeout(()=> s.remove(), 1900); } }
+    tableBody.innerHTML = '';
+    pageNumbers.innerHTML = '';
 
-  // Boot
-  document.addEventListener('DOMContentLoaded', ()=>{
-    tick(); setInterval(tick,60_000); weather(); renderMap(); renderReports(); stats();
-    document.getElementById('sev').addEventListener('input', (e)=> document.getElementById('sev-val').textContent=e.target.value );
-  });
-  </script>
+    const userIncidents = getFilteredUserIncidents(readIncidents(), filter);
+
+    if (!userIncidents.length){
+      noMsg.classList.remove('hidden');
+      reportCount.textContent = 'Showing 0 to 0 of 0 results';
+      return;
+    } else {
+      noMsg.classList.add('hidden');
+    }
+
+    const perPage = 5;
+    const totalPages = Math.ceil(userIncidents.length / perPage);
+    const startIndex = (page - 1) * perPage;
+    const slice = userIncidents.slice(startIndex, startIndex + perPage);
+
+    const startCount = startIndex + 1;
+    const endCount = Math.min(startIndex + perPage, userIncidents.length);
+    reportCount.textContent = `Showing ${startCount} to ${endCount} of ${userIncidents.length} results`;
+
+    slice.forEach(incident => {
+      const tr = document.createElement('tr');
+      tr.className = 'hover:bg-gray-50';
+      const sevClass = incident.severity <= 3 ? 'severity-1-3' : (incident.severity <= 6 ? 'severity-4-6' : 'severity-7-10');
+      tr.innerHTML = `
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+          <div class="flex items-center"><span class="emergency-type-icon" aria-hidden="true">${getEmergencyIcon(incident.type)}</span><span>${incident.type}</span></div>
+        </td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+          <div class="flex items-center"><span class="severity-indicator ${sevClass}" aria-hidden="true"></span><span>${incident.severity}/10</span></div>
+        </td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${incident.address}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatDateTime(incident.timestamp)}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+          <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${incident.resolved ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">${incident.resolved ? 'Resolved' : 'Pending'}</span>
+        </td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+          ${incident.adminReply ? `<div class="flex items-center"><i class="fa-solid fa-comment-dots text-gray-500 mr-2" aria-hidden="true"></i><span class="truncate max-w-xs">${incident.adminReply.substring(0,30)}${incident.adminReply.length>30?'...':''}</span></div>` : 'No response yet'}
+        </td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+          <button data-view-id="${incident.id}" class="text-blue-600 hover:text-blue-900" aria-label="View details of ${incident.type} report"><i class="fa-solid fa-eye mr-1" aria-hidden="true"></i> View</button>
+        </td>`;
+      tableBody.appendChild(tr);
+    });
+
+    // number buttons
+    if (totalPages > 1){
+      const maxVisible = 5;
+      let start = Math.max(1, page - Math.floor(maxVisible/2));
+      let end   = Math.min(totalPages, start + maxVisible - 1);
+      if (end - start + 1 < maxVisible) start = Math.max(1, end - maxVisible + 1);
+
+      for (let i=start; i<=end; i++){
+        const btn = document.createElement('button');
+        btn.className = `relative inline-flex items-center px-4 py-2 border text-sm font-medium ${i===page ? 'bg-blue-50 border-blue-500 text-blue-600' : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'}`;
+        btn.textContent = i;
+        btn.addEventListener('click', ()=> { currentPage = i; updateEmergencyReportsTable(currentFilter, currentPage); });
+        pageNumbers.appendChild(btn);
+      }
+    }
+
+    // row view buttons (delegate once)
+    tableBody.addEventListener('click', function onClick(e){
+      const id = e.target.closest('button')?.dataset?.viewId;
+      if (id) showEmergencyDetails(Number(id));
+    }, { once: true });
+  }
+
+  /* ---------- Stats ---------- */
+  function updateStats(){
+    const incidents = readIncidents();
+    const today = new Date().toISOString().split('T')[0];
+    const resolvedToday = incidents.filter(i => i.resolved && i.resolvedTimestamp && i.resolvedTimestamp.split('T')[0] === today).length;
+    document.getElementById('resolved-today').textContent = resolvedToday;
+
+    const activeResponders = Math.max(0, Math.min(99, incidents.filter(i=>!i.resolved).length * 3 + 5));
+    document.getElementById('active-responders').textContent = activeResponders;
+  }
+
+  /* ---------- Helpers ---------- */
+  function resolveIncident(id){
+    const incidents = readIncidents();
+    const idx = incidents.findIndex(i => i.id === id);
+    if (idx !== -1){
+      incidents[idx].resolved = true;
+      incidents[idx].resolvedTimestamp = new Date().toISOString();
+      writeIncidents(incidents);
+      showNotification('Incident marked as resolved', 'success');
+    }
+  }
+
+  function getMarkerColor(type){
+    const m = {
+      'Tornado':'#8B0000','Severe Thunderstorm':'#4B0082','Flash Flood Warning':'#006994','Hailstorm':'#4682B4','Winter Storm':'#B0E0E6',
+      'Major Traffic Accident':'#FF8C00','Gas Leak':'#DAA520','Chemical Spill':'#556B2F','Building Collapse':'#8B4513',
+      'Medical Emergency':'#006400','Mass Casualty Incident':'#800000','Power Outage':'#696969','Water Main Break':'#1E90FF','Other Emergency':'#6A5ACD'
+    };
+    return m[type] || '#6A5ACD';
+  }
+
+  function getEmergencyAbbreviation(type){
+    const words = String(type).trim().split(/\s+/);
+    if (words.length === 1) return words[0].substring(0,2).toUpperCase();
+    return words.map(w => w[0].toUpperCase()).join('');
+  }
+
+  function getEmergencyIcon(type){
+    const m = {
+      'Tornado':'🌪️','Severe Thunderstorm':'⛈️','Flash Flood Warning':'🌊','Hailstorm':'🧊','Winter Storm':'❄️',
+      'Major Traffic Accident':'🚗','Gas Leak':'⚠️','Chemical Spill':'☢️','Building Collapse':'🏚️',
+      'Medical Emergency':'🚑','Mass Casualty Incident':'🆘','Power Outage':'💡','Water Main Break':'🚰','Other Emergency':'❓'
+    };
+    return m[type] || '❓';
+  }
+
+  function formatDateTime(ts){
+    const d = new Date(ts);
+    return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function showEmergencyDetails(id){
+    const incidents = readIncidents();
+    const incident = incidents.find(i => i.id === id);
+    if (!incident){ showNotification('Incident not found', 'error'); return; }
+
+    document.getElementById('modal-title').textContent = `${incident.type} Details`;
+
+    const sevClass = incident.severity <= 3 ? 'severity-1-3' : (incident.severity <= 6 ? 'severity-4-6' : 'severity-7-10');
+
+    let html = `
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div>
+          <h4 class="font-bold text-gray-700 mb-2">Emergency Type</h4>
+          <p class="flex items-center"><span class="emergency-type-icon mr-2" aria-hidden="true">${getEmergencyIcon(incident.type)}</span>${incident.type}</p>
+        </div>
+        <div>
+          <h4 class="font-bold text-gray-700 mb-2">Severity Level</h4>
+          <div class="flex items-center"><span class="severity-indicator ${sevClass}" aria-hidden="true"></span><span>${incident.severity}/10</span></div>
+        </div>
+        <div>
+          <h4 class="font-bold text-gray-700 mb-2">Location</h4>
+          <p>${incident.address}</p>
+        </div>
+        <div>
+          <h4 class="font-bold text-gray-700 mb-2">Reported At</h4>
+          <p>${formatDateTime(incident.timestamp)}</p>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="font-bold text-gray-700 mb-2">Description</h4>
+        <p class="bg-gray-50 p-4 rounded-lg">${incident.description || 'No description provided'}</p>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="font-bold text-gray-700 mb-2">Status</h4>
+        <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${incident.resolved ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
+          ${incident.resolved ? 'Resolved' : 'Pending'}
+        </span>
+        ${incident.resolved ? `<p class="mt-2 text-sm">Resolved on: ${formatDateTime(incident.resolvedTimestamp)}</p>` : ''}
+      </div>
+
+      ${incident.adminReply ? `
+      <div class="bg-blue-50 p-4 rounded-lg border border-blue-100">
+        <h4 class="font-bold text-gray-700 mb-2 flex items-center">
+          <i class="fa-solid fa-user-shield text-blue-600 mr-2" aria-hidden="true"></i>
+          Official Response
+        </h4>
+        <p>${incident.adminReply}</p>
+      </div>` : '' }
+    `;
+
+    if (!incident.resolved){
+      html += `
+        <div class="mt-6 flex justify-end">
+          <button id="resolve-incident" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">
+            <i class="fa-solid fa-circle-check mr-1" aria-hidden="true"></i> Mark Resolved
+          </button>
+        </div>`;
+    }
+
+    document.getElementById('modal-content').innerHTML = html;
+    if (!incident.resolved){
+      document.getElementById('resolve-incident').addEventListener('click', ()=>{
+        resolveIncident(incident.id);
+        closeModal();
+        updateEmergencyMap();
+        updateEmergencyReportsTable();
+        updateStats();
+      }, { once: true });
+    }
+
+    emergencyModal.classList.remove('hidden');
+  }
+
+  function closeModal(){ emergencyModal.classList.add('hidden'); }
+
+  function showNotification(message, type='success'){
+    const el = document.createElement('div');
+    el.className = `notification ${type}`;
+    el.setAttribute('aria-live','polite');
+    const icon = type==='success' ? 'fa-circle-check'
+               : type==='error'   ? 'fa-circle-exclamation'
+               : type==='warning' ? 'fa-triangle-exclamation'
+               : 'fa-circle-info';
+    el.innerHTML = `<i class="fa-solid ${icon} mr-2" aria-hidden="true"></i><span>${message}</span>`;
+    document.body.appendChild(el);
+    requestAnimationFrame(()=> el.classList.add('show'));
+    setTimeout(()=>{ el.classList.remove('show'); setTimeout(()=> el.remove(), 300); }, 3000);
+  }
+
+  // Expose for row buttons created dynamically (if ever needed)
+  window.showEmergencyDetails = showEmergencyDetails;
+});
+</script>
+<!-- <script src="{{ url_for('static', filename='js/frontend_bridge.js') }}"></script> -->
 </body>
 </html>
